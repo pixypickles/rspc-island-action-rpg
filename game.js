@@ -29,14 +29,16 @@ let heroName = localStorage.getItem('risupekuHeroName') || 'ぴくるす';
 let progress = JSON.parse(localStorage.getItem('risupekuProgress') || 'null') || {
   level:1, exp:0, sp:0,
   maxHP:42, maxMP:24, atk:8, def:5,
-  learned:{ waterHeal:true, icePebble:true, iceSlash:false }
+  learned:{ waterHeal:true, icePebble:true, iceSlash:true }
 };
 if(progress.gold===undefined) progress.gold=90;
 if(!progress.items) progress.items={potion:0};
 if(progress.items.highPotion===undefined)progress.items.highPotion=0;
-if(progress.heroIceWave===undefined)progress.heroIceWave=false;
+if(progress.heroIceWave===undefined)progress.heroIceWave=true;
 if(progress.heroPebbleRandom===undefined)progress.heroPebbleRandom=0;
-if(progress.heroPebbleAll===undefined)progress.heroPebbleAll=progress.heroIceWave?1:0;
+if(progress.heroPebbleAll===undefined)progress.heroPebbleAll=1;
+progress.heroPebbleAll=Math.max(1,progress.heroPebbleAll||0);
+progress.heroIceWave=true;
 if(progress.heroHealSkill===undefined)progress.heroHealSkill=1;
 if(progress.heroManaSkill===undefined)progress.heroManaSkill=progress.gameCleared?1:0;
 progress.heroManaSkill=Math.max(0,Math.min(2,progress.heroManaSkill||0));
@@ -90,10 +92,11 @@ if(progress.ngPlusUnlocked===undefined)progress.ngPlusUnlocked=false;
 // Ver.1.35以前に4人異界で九頭龍を倒していた既存セーブも「はじめから＋」解禁扱いにする。
 if(progress.orochiDefeated && progress.fourAbyssUnlocked)progress.ngPlusUnlocked=true;
 if(progress.heroIceSkill===undefined){
-  progress.heroIceSkill=progress.learned?.iceSlash?1:0;
+  progress.heroIceSkill=1;
 }
-if(!progress.learned)progress.learned={waterHeal:true,icePebble:true,iceSlash:false};
-progress.learned.iceSlash=(progress.heroIceSkill||0)>=1;
+if(!progress.learned)progress.learned={waterHeal:true,icePebble:true,iceSlash:true};
+progress.heroIceSkill=Math.min(3,Math.max(1,progress.heroIceSkill||0));
+progress.learned.iceSlash=true;
 
 function partyLevel(){ return progress.level; }
 
@@ -107,9 +110,10 @@ function heroStats(){
   };
 }
 function heroIceHits(){
-  const lv=progress.heroIceSkill||0;
-  const base=lv>=3?3:lv>=2?2:1;
-  return base*(progress.nineTailGear?3:1);
+  // 通常は初期1回＋3段階強化で2/3/4回。九尾の力を得た後は最終的に9連斬へ飛躍する。
+  if(progress.nineTailGear)return 9;
+  const lv=Math.max(1,progress.heroIceSkill||1);
+  return Math.min(4,lv);
 }
 function heroPebbleHitCount(){
   const pr=progress.heroPebbleRandom||0;
@@ -188,7 +192,7 @@ progress.gyouSkills.doubleThrust=Math.min(2,progress.gyouSkills.doubleThrust||0)
 if(progress.gyouSkills.earthBreath===undefined)progress.gyouSkills.earthBreath=0;
 progress.gyouSkills.earthBreath=Math.max(0,Math.min(2,progress.gyouSkills.earthBreath||0));
 
-// ARPG Ver.0.1.5: ターン制向けで役割がなくなったスキルを整理。
+// ARPG Ver.0.1.6: ターン制向けで役割がなくなったスキルを整理。
 // 既存セーブで習得済みだった場合は、使ったSPを一度だけ返却する。
 if(!progress.arpgSkillCleanup015){
   const yHaste=progress.yunoSkills?.haste||0;
@@ -1013,7 +1017,7 @@ const nineTailPostDialog=[
 ];
 const nineTailHouseDialog=[
  ['elder','この九尾の妖刀と、九尾の衣、お主なら使いこなせるじゃろう。'],
- ['narrator','九尾の妖刀を手に入れた！ 攻撃+200。氷結斬りの攻撃回数3倍、さらに1撃ごとに固定99ダメージ。'],
+ ['narrator','九尾の妖刀を手に入れた！ 攻撃+200。氷結斬りが九連斬になり、さらに1撃ごとに固定99ダメージ。'],
  ['narrator','九尾の衣を手に入れた！ HP+50、MP+50、被ダメージ50%カット。氷魔法3倍、氷撃+2発、回復魔法+100。'],
  ['elder','火山の麓の立ち入り禁止区域へ行くがよい。絶対零度の封印が解ける時が来たのじゃ。']
 ];
@@ -1833,7 +1837,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.5',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.7',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態からスタート',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -2540,7 +2544,7 @@ function heroMagicFlowPower(v){
   return Math.floor(v*(1+rate*stacks));
 }
 function yunoPassiveMP(){
-  // Ver.0.1.5以降はユーノ自身ではなく、ARPG中の主人公MPを徐々に回復する。
+  // Ver.0.1.6以降はユーノ自身ではなく、ARPG中の主人公MPを徐々に回復する。
   return 0;
 }
 function gyouPassiveHP(){
@@ -4397,38 +4401,38 @@ function drawMenu(){
       text(`スキルポイント：${progress.sp}`,55,212,21,'left','#ffe8a8');
 
       // 主人公スキルツリー：横幅を整理し、回復・魔力ルートも読みやすく表示。
-      const il=progress.heroIceSkill||0;
+      const il=Math.max(1,progress.heroIceSkill||1);
       const nodeW=205,nodeH=66,gap=20,startX=45;
       const iceNodes=[
-        ['氷結斬り','MP7 / 単体1回',1],
-        ['氷結二段斬り','MP9 / 単体2回',1],
-        ['氷結三連斬り','MP11 / 単体3回',2]
+        ['氷結斬り','初期：高速移動1回',0],
+        ['氷結二段斬り','高速移動2回 / 青い残像2本',2],
+        ['氷結三連斬り','高速移動3回 / 青い残像3本',3]
       ];
-      text('氷剣ルート',45,239,15,'left','#bfe7f6',800);
+      text('氷剣ルート　※最大3回。九尾の力で現在の回数×3（最大9回）',45,239,15,'left','#bfe7f6',800);
       iceNodes.forEach((n,i)=>{
-        const x=startX+i*(nodeW+gap),need=i+1,owned=il>=need,next=il===i;
+        const x=startX+i*(nodeW+gap),need=i+1,owned=il>=need,next=i>0&&il===i;
         outlineRect(x,252,nodeW,nodeH,owned?'#b9d9e8':next?'#e7f5fb':'#29394e',owned?'#6aaacb':next?'#78b9d7':'#536273',2);
-        text(n[0],x+12,275,16,'left',owned?'#17324a':next?'#18334a':'#8192a0',800);
-        text(n[1],x+12,295,11,'left',owned?'#35566d':next?'#3d5d73':'#697b89');
-        text(owned?'習得済み':next?`必要 SP${n[2]}`:'前の技を習得',x+nodeW-10,311,10,'right',owned?'#356b7b':next?'#3d6f8a':'#74838d',800);
+        text(n[0],x+10,275,15,'left',owned?'#17324a':next?'#18334a':'#8192a0',800);
+        text(n[1],x+10,295,10,'left',owned?'#35566d':next?'#3d5d73':'#697b89');
+        text(i===0?'初期習得':owned?'強化済み':next?`必要 SP${n[2]}`:'前段階を強化',x+nodeW-8,311,10,'right',owned?'#356b7b':next?'#3d6f8a':'#74838d',800);
         if(i<2){ctx.strokeStyle=owned?'#83bfd6':'#536273';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x+nodeW+3,285);ctx.lineTo(x+nodeW+gap-4,285);ctx.stroke();}
       });
 
       text('氷のつぶて派生（初期技から2方向）',45,343,14,'left','#bfe7f6',800);
       const pr=progress.heroPebbleRandom||0, pa=progress.heroPebbleAll||0;
       const pebNodes=[
-        [45,356,'氷つぶて乱射II','ランダム3発',1,pr>=1,pr===0],
-        [245,356,'氷つぶて乱射III','ランダム5発',1,pr>=2,pr===1],
-        [445,356,'氷つぶて乱射IV','ランダム7発',2,pr>=3,pr===2],
-        [45,425,'氷晶波','敵全体',1,pa>=1,pa===0],
-        [245,425,'氷晶大波','全体攻撃強化',2,pa>=2,pa===1]
+        [45,356,'氷つぶて乱射II','ランダム3発',2,pr>=1,pr===0],
+        [245,356,'氷つぶて乱射III','ランダム5発',3,pr>=2,pr===1],
+        [445,356,'氷つぶて乱射IV','ランダム7発',4,pr>=3,pr===2],
+        [45,425,'氷晶波','初期習得 / 氷弾MAXチャージ',0,true,false],
+        [245,425,'氷晶大波','チャージ波を強化',4,pa>=2,pa===1]
       ];
       pebNodes.forEach(n=>{
         const [x,y,name,desc,cost,owned,next]=n;
         outlineRect(x,y,180,58,owned?'#c8e2ed':next?'#e7f5fb':'#29394e',owned?'#6aaacb':next?'#78b9d7':'#536273',2);
         text(name,x+10,y+20,13,'left',owned?'#17324a':next?'#18334a':'#8192a0',800);
         text(desc,x+10,y+39,10,'left',owned?'#35566d':next?'#3d5d73':'#697b89');
-        text(owned?'習得済み':next?`SP${cost}`:'要前段階',x+170,y+52,9,'right',owned?'#356b7b':next?'#3d6f8a':'#74838d');
+        text(cost===0?'初期習得':owned?'習得済み':next?`SP${cost}`:'要前段階',x+170,y+52,9,'right',owned?'#356b7b':next?'#3d6f8a':'#74838d');
       });
 
       const hh=progress.heroHealSkill||1, hm=progress.heroManaSkill||0;
@@ -4437,18 +4441,18 @@ function drawMenu(){
       const healName=hh>=4?'九尾大水癒':hh>=3?'大水癒':hh>=2?'水の大いやし':'水のいやし';
       text(healName,705,278,18,'left','#17324a',800);
       text(hh>=4?'味方全体 最大HP75%回復 / MP18':hh>=3?'味方全体 HP130回復 / MP12':hh>=2?'HP120回復 / MP8':'HP50回復 / MP5',705,302,11,'left','#3d5d73');
-      text(hh>=4?'Lv.4 最大':hh===3?'次 Lv.4　SP25（即強化可）':hh===2?'次 Lv.3　SP2':'次 Lv.2　SP1',900,329,11,'right','#3d6f8a',800);
+      text(hh>=4?'Lv.4 最大':hh===3?'次 Lv.4　SP25（即強化可）':hh===2?'次 Lv.3　SP3':'次 Lv.2　SP2',900,329,11,'right','#3d6f8a',800);
 
       outlineRect(690,360,225,92,hm?'#c8e2ed':'#e7f5fb',hm?'#6aaacb':'#78b9d7',2);
       text(hm>=2?'水脈の恵み':'水脈の雫',705,386,18,'left','#17324a',800);
       text(hm>=2?'味方1人 MP32回復 / MP6':'味方1人 MP18回復 / MP6',705,410,12,'left','#3d5d73');
-      text(hm>=2?'Lv.2 最大':hm===1?'次 Lv.2　SP2':'必要 SP1',900,438,11,'right',hm?'#356b7b':'#3d6f8a',800);
+      text(hm>=2?'Lv.2 最大':hm===1?'次 Lv.2　SP3':'必要 SP2',900,438,11,'right',hm?'#356b7b':'#3d6f8a',800);
 
       const mf=progress.heroMagicFlow||0;
       outlineRect(690,460,225,62,mf?'#d8eef7':'#26394b',mf?'#6aaacb':'#668398',2);
       text('水魔の高まり（パッシブ）',702,481,14,'left',mf?'#17324a':'#e0edf4',800);
       text(mf>=2?'魔法威力 +5%/ターン':mf===1?'魔法威力 +3%/ターン':'氷結斬り系は対象外',702,501,10,'left',mf?'#35566d':'#b7c7d0'); if(progress.hiddenSkillsUnlocked){outlineRect(470,465,190,55,progress.hiddenSkills?.hero?'#d9efff':'#26394b','#557fd0',2);text('デスブリザード',565,487,14,'center',progress.hiddenSkills?.hero?'#17324a':'#fff',900);text(progress.hiddenSkills?.hero?'習得済み':'SP100',565,509,12,'center','#ffe7a5');}
-      text(mf>=2?'Lv.2 最大':mf===1?'次 Lv.2 SP2':'習得 SP1',900,515,10,'right',mf?'#356b7b':'#ffe7a5',800);
+      text(mf>=2?'Lv.2 最大':mf===1?'次 Lv.2 SP3':'習得 SP2',900,515,10,'right',mf?'#356b7b':'#ffe7a5',800);
     }
   }
 }
@@ -4549,32 +4553,33 @@ function menuTap(x,y){
 
   if(menuPage==='skill' && menuCharacter==='hero' && x>=690&&x<=915&&y>=460&&y<=522){
     const lv=progress.heroMagicFlow||0;if(lv>=2){flashText='水魔の高まりは最大強化です';flashTimer=1.4;return;}
-    const cost=lv===0?1:2;if(progress.sp<cost){flashText=`SPが足りない（必要 ${cost}）`;flashTimer=1.6;return;}
+    const cost=lv===0?2:3;if(progress.sp<cost){flashText=`SPが足りない（必要 ${cost}）`;flashTimer=1.6;return;}
     progress.sp-=cost;progress.heroMagicFlow=lv+1;saveProgress();saveGame();
     flashText=lv?'「水魔の高まり」をLv.2に強化！':'パッシブ「水魔の高まり」を習得！';flashTimer=1.8;return;
   }
 
-  // Hero ice-blade evolution: click the next unlocked node in the horizontal route.
+  // Hero ice-blade evolution: 1 -> 2 -> 3 dashes only. Nine-tail multiplies the current count by 3.
   if(menuPage==='skill' && menuCharacter==='hero' && y>=252 && y<=318){
     const nodeW=205,gap=20,startX=45;
     const index=Math.floor((x-startX)/(nodeW+gap));
     const within=index>=0&&index<3 && x>=startX+index*(nodeW+gap) && x<=startX+index*(nodeW+gap)+nodeW;
     if(within){
-      const lv=progress.heroIceSkill||0;
+      const lv=Math.max(1,Math.min(3,progress.heroIceSkill||1));
       if(index<lv){flashText='この技は習得済みです';flashTimer=1.4;return;}
-      if(index>lv){flashText='ひとつ前の技を先に習得してください';flashTimer=1.6;return;}
+      if(index>lv){flashText='ひとつ前の技を先に強化してください';flashTimer=1.6;return;}
       if(lv>=3){flashText='氷剣ルートは最大強化です';flashTimer=1.6;return;}
-      const cost=lv===2?2:1;
+      const cost=[0,2,3][lv];
       if(progress.sp<cost){flashText=`SPが足りない（必要 ${cost}）`;flashTimer=1.7;return;}
       progress.sp-=cost;progress.heroIceSkill=lv+1;progress.learned.iceSlash=true;
-      saveProgress();saveGame();flashText=`「${heroIceSkillName()}」を習得！`;flashTimer=2.0;return;
+      progress.arpgSkills ||= {};progress.arpgSkills.hero ||= {};progress.arpgSkills.hero.iceSlash=Math.max(progress.arpgSkills.hero.iceSlash||1,progress.heroIceSkill);
+      saveProgress();saveGame();flashText=`「${heroIceSkillName()}」に強化！`;flashTimer=2.0;return;
     }
   }
   if(menuPage==='skill' && menuCharacter==='hero'){
     if(x>=690&&x<=915&&y>=360&&y<=452){
       const ml=progress.heroManaSkill||0;
       if(ml>=2){flashText='水脈の雫は最大強化です';flashTimer=1.4;return;}
-      const cost=ml===0?1:2;
+      const cost=ml===0?2:3;
       if(progress.sp<cost){flashText=`SPが足りない（必要 ${cost}）`;flashTimer=1.5;return;}
       progress.sp-=cost;progress.heroManaSkill=ml+1;saveProgress();saveGame();
       flashText=ml===0?'「水脈の雫」を習得！':'「水脈の恵み」に強化！';flashTimer=1.8;return;
@@ -4582,7 +4587,7 @@ function menuTap(x,y){
     if(x>=690&&x<=915&&y>=252&&y<=344){
       const lv=progress.heroHealSkill||1;
       if(lv>=4){flashText='回復ルートは最大強化です';flashTimer=1.5;return;}
-      const cost=lv===3?25:lv===2?2:1;
+      const cost=lv===3?25:lv===2?3:2;
       if(progress.sp<cost){flashText=`SPが足りない（必要 ${cost}）`;flashTimer=1.6;return;}
       progress.sp-=cost;progress.heroHealSkill=lv+1;saveProgress();saveGame();
       flashText=lv===1?'「水の大いやし」に強化！':lv===2?'「大水癒」に強化！':'「九尾大水癒」に強化！';flashTimer=1.9;return;
@@ -4597,13 +4602,13 @@ function menuTap(x,y){
       saveProgress();saveGame();flashText=`「${name}」を習得！`;flashTimer=2;return true;
     };
     if(y>=356&&y<=414){
-      if(x>=45&&x<=225){tryPebbleNode('random',0,1,'氷つぶて乱射II');return;}
-      if(x>=245&&x<=425){tryPebbleNode('random',1,1,'氷つぶて乱射III');return;}
-      if(x>=445&&x<=625){tryPebbleNode('random',2,2,'氷つぶて乱射IV');return;}
+      if(x>=45&&x<=225){tryPebbleNode('random',0,2,'氷つぶて乱射II');return;}
+      if(x>=245&&x<=425){tryPebbleNode('random',1,3,'氷つぶて乱射III');return;}
+      if(x>=445&&x<=625){tryPebbleNode('random',2,4,'氷つぶて乱射IV');return;}
     }
     if(y>=425&&y<=483){
-      if(x>=45&&x<=225){tryPebbleNode('all',0,1,'氷晶波');return;}
-      if(x>=245&&x<=425){tryPebbleNode('all',1,2,'氷晶大波');return;}
+      if(x>=45&&x<=225){flashText='氷晶波は初期習得済みです';flashTimer=1.5;return;}
+      if(x>=245&&x<=425){tryPebbleNode('all',1,4,'氷晶大波');return;}
     }
   }
 
@@ -6656,7 +6661,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1.5
+// ARPG PROTOTYPE Ver.0.1.7
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
@@ -6694,6 +6699,15 @@ function arpgEnsureProgress(){
   }
 }
 function arpgRank(who,key){arpgEnsureProgress();return progress.arpgSkills?.[who]?.[key]||1;}
+function arpgIceSlashRank(){
+  const arpgLv=arpgRank('hero','iceSlash');
+  const treeLv=Math.max(1,progress.heroIceSkill||1);
+  return Math.min(3,Math.max(arpgLv,treeLv));
+}
+function arpgIceSlashCount(){
+  const base=arpgIceSlashRank();
+  return base*(progress.nineTailGear?3:1);
+}
 function arpgIceShotRank(){
   // 旧スキルツリーの「氷つぶて乱射II/III/IV」もARPG氷弾の強化として扱う。
   const arpgLv=arpgRank('hero','iceShot');
@@ -6702,10 +6716,18 @@ function arpgIceShotRank(){
 }
 function arpgSPKey(who){return who==='hero'?'sp':who==='suzu'?'suzuSP':who==='yuno'?'yunoSP':'gyouSP';}
 function arpgSpendSP(who,key){
-  arpgEnsureProgress(); const spk=arpgSPKey(who),lv=arpgRank(who,key);
-  if(lv>=5){flashText='このスキルは最大Lv.5';flashTimer=1.4;return;}
-  if((progress[spk]||0)<1){flashText='SPが足りない';flashTimer=1.4;return;}
-  progress[spk]--; progress.arpgSkills[who][key]=lv+1; saveProgress();saveGame(); arpgBuildPanel();
+  arpgEnsureProgress(); const spk=arpgSPKey(who);
+  let lv=key==='iceSlash'&&who==='hero'?arpgIceSlashRank():key==='iceShot'&&who==='hero'?arpgIceShotRank():arpgRank(who,key);
+  const max=who==='hero'&&key==='iceSlash'?3:who==='hero'&&key==='iceShot'?4:5;
+  if(lv>=max){flashText=`このスキルは最大Lv.${max}`;flashTimer=1.4;return;}
+  // 主人公は旧試作の一律SP1を廃止し、段階が進むほど少し重くする。
+  const cost=who==='hero'?Math.max(2,lv+1):1;
+  if((progress[spk]||0)<cost){flashText=`SPが足りない（必要 ${cost}）`;flashTimer=1.4;return;}
+  progress[spk]-=cost;
+  progress.arpgSkills[who][key]=lv+1;
+  if(who==='hero'&&key==='iceSlash')progress.heroIceSkill=Math.min(3,Math.max(progress.heroIceSkill||1,lv+1));
+  if(who==='hero'&&key==='iceShot')progress.heroPebbleRandom=Math.max(progress.heroPebbleRandom||0,lv);
+  saveProgress();saveGame(); arpgBuildPanel();
 }
 function arpgEnemySource(){
   if(battle.enemies&&battle.enemies.length)return battle.enemies;
@@ -6784,23 +6806,42 @@ function arpgInputDir8(){
 }
 function arpgUseA(){
   if(!arpg||arpg.cd.a>0||arpg.winTimer||arpg.loseTimer||arpg.hero.dash)return;const cost=6;if(!arpgSpendMP(cost))return;
-  const lv=arpgRank('hero','iceSlash'),dir=arpgInputDir8();
+  const lv=arpgIceSlashRank(),count=arpgIceSlashCount(),dir=arpgInputDir8();
   if(Math.abs(dir.x)>.1)arpg.hero.face=dir.x>0?1:-1;
-  arpg.hero.dash={dx:dir.x,dy:dir.y,time:0,total:.16,dist:118+lv*7,hit:new Set(),trailT:0};
-  arpg.fx.push({type:'iceDashLine',x1:arpg.hero.x,y1:arpg.hero.y-8,x2:arpg.hero.x,y2:arpg.hero.y-8,age:0,life:.34});
+  // 強化ごとに実際の高速移動回数を増やす。通常は1→2→3回で終了。
+  // 九尾の力は現在回数を3倍するため、3→6→9回。回数が多いほど1区間を短くして暴走を防ぐ。
+  const dist=count===1?124:count===2?94:count===3?80:count===6?55:43;
+  arpg.hero.dash={dx:dir.x,dy:dir.y,segment:0,segments:count,time:0,total:.105,dist,hit:new Set(),startX:arpg.hero.x,startY:arpg.hero.y-8};
+  arpg.message=progress.nineTailGear?`九尾・氷結斬り ×${count}`:count>1?`氷結斬り ×${count}`:'氷結斬り！';arpg.messageT=.8;
   arpg.cd.a=Math.max(1.5,3.0-lv*.16);sfx('ice');
 }
 function arpgBeginB(){if(!arpg||arpg.cd.b>0||arpg.winTimer||arpg.loseTimer)return;arpg.charging=true;arpg.charge=0;}
 function arpgReleaseB(){
-  if(!arpg||!arpg.charging)return;const c=arpg.charge;arpg.charging=false;arpg.charge=0;const maxed=c>=1.15,cost=maxed?14:8;if(!arpgSpendMP(cost))return;
-  const lv=arpgIceShotRank(),shotCount=lv<=1?1:lv===2?3:lv===3?5:7;const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y);
+  if(!arpg||!arpg.charging)return;
+  const c=arpg.charge;arpg.charging=false;arpg.charge=0;
+  const maxed=c>=1.15,cost=maxed?14:8;if(!arpgSpendMP(cost))return;
+  const lv=arpgIceShotRank(),e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y);
   const dx=e?e.x-arpg.hero.x:arpg.hero.face,dy=e?e.y-arpg.hero.y:0,baseAng=Math.atan2(dy,dx);
-  const spread=(maxed?Math.PI/5:Math.PI/7),speed=maxed?390:420;
-  for(let i=0;i<shotCount;i++){
-    const off=shotCount===1?0:(i-(shotCount-1)/2)*(spread/(shotCount-1)),a=baseAng+off;
-    arpg.projectiles.push({x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:maxed?54:16,life:1.8,dmg:(progress.atk||8)*(.8+(Math.min(c,1.2)*.6))+8+lv*4,area:maxed});
+  if(Math.abs(dx)>.1)arpg.hero.face=dx>0?1:-1;
+  if(maxed){
+    // 最大チャージは多重氷弾ではなく「氷晶波」。前方へ大きな氷の波を放つ。
+    const waveLv=Math.max(1,progress.heroPebbleAll||1);
+    const speed=330;
+    arpg.projectiles.push({x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(baseAng)*speed,vy:Math.sin(baseAng)*speed,r:waveLv>=2?78:62,life:1.15,dmg:(progress.atk||8)*1.65+22+lv*5+(waveLv-1)*12,area:true,wave:true});
+    arpg.message=waveLv>=2?'氷晶大波！':'氷晶波！';arpg.messageT=1.0;
+  }else{
+    const shotCount=lv<=1?1:lv===2?3:lv===3?5:7;
+    // 狭い前方コーン内へランダム発射。等間隔の綺麗な扇形にはしない。
+    const halfCone=0.18; // 約±10度
+    for(let i=0;i<shotCount;i++){
+      let offset=shotCount===1?0:(Math.random()*2-1)*halfCone;
+      // 全弾が同じ方向へ固まりすぎない程度の軽い散らし。
+      if(shotCount>1)offset+=(i-(shotCount-1)/2)*0.008;
+      const a=baseAng+offset,speed=430+Math.random()*35;
+      arpg.projectiles.push({x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:16,life:1.8,dmg:(progress.atk||8)*(.8+(Math.min(c,1.2)*.6))+8+lv*4,area:false});
+    }
+    arpg.message=`氷弾 ×${shotCount}`;arpg.messageT=.9;
   }
-  arpg.message=`氷弾 ×${shotCount}`;arpg.messageT=.9;
   arpg.cd.b=Math.max(1.2,2.5-lv*.14);sfx('ice');
 }
 function arpgUseC(){
@@ -6889,12 +6930,21 @@ function arpgUpdate(dt){
     }
   }
   if(arpg.hero.dash&&!arpg.winTimer&&!arpg.loseTimer){
-    const d=arpg.hero.dash,step=d.dist/d.total*dt,oldX=arpg.hero.x,oldY=arpg.hero.y;
-    arpg.hero.x+=d.dx*step;arpg.hero.y+=d.dy*step;d.time+=dt;d.trailT-=dt;
-    if(d.trailT<=0){arpg.fx.push({type:'iceDashLine',x1:oldX,y1:oldY-8,x2:arpg.hero.x,y2:arpg.hero.y-8,age:0,life:.28});d.trailT=.018;}
-    const lv=arpgRank('hero','iceSlash');
-    for(const e of arpg.enemies){if(e.src.hp<=0||d.hit.has(e))continue;const vx=e.x-arpg.hero.x,vy=e.y-arpg.hero.y;if(Math.hypot(vx,vy)<58){d.hit.add(e);const dmg=(progress.atk||8)*1.18+10+lv*5+Math.random()*6;arpgDamageEnemy(e,dmg,'ice');e.slow=1.2+.18*lv;}}
-    if(d.time>=d.total)arpg.hero.dash=null;
+    const d=arpg.hero.dash,step=d.dist/d.total*dt;
+    arpg.hero.x+=d.dx*step;arpg.hero.y+=d.dy*step;d.time+=dt;
+    const lv=arpgIceSlashRank();
+    for(const e of arpg.enemies){if(e.src.hp<=0||d.hit.has(e))continue;const vx=e.x-arpg.hero.x,vy=e.y-arpg.hero.y;if(Math.hypot(vx,vy)<58){d.hit.add(e);const dmg=(progress.atk||8)*1.08+9+lv*4+Math.random()*6;arpgDamageEnemy(e,dmg,'ice');e.slow=1.2+.18*lv;}}
+    if(d.time>=d.total){
+      const endX=arpg.hero.x,endY=arpg.hero.y-8;
+      arpg.fx.push({type:'iceDashLine',x1:d.startX,y1:d.startY,x2:endX,y2:endY,age:0,life:.38});
+      d.segment++;
+      if(d.segment>=d.segments){arpg.hero.dash=null;}
+      else{
+        d.time=0;d.hit=new Set();d.startX=endX;d.startY=endY;
+        // 各区間を明確な一閃として見せるため、区切りごとに氷SEを軽く重ねる。
+        if(d.segment%2===0)sfx('ice');
+      }
+    }
   }else{
     let dx=0,dy=0;if(keys.ArrowLeft||keys.a||keys.A)dx--;if(keys.ArrowRight||keys.d||keys.D)dx++;if(keys.ArrowUp||keys.w||keys.W)dy--;if(keys.ArrowDown||keys.s||keys.S)dy++;dx+=touchVector.x;dy+=touchVector.y;const l=Math.hypot(dx,dy);if(l>.05&&!arpg.winTimer&&!arpg.loseTimer){dx/=Math.max(1,l);dy/=Math.max(1,l);arpg.hero.x+=dx*205*dt;arpg.hero.y+=dy*205*dt;if(Math.abs(dx)>.15)arpg.hero.face=dx>0?1:-1;}
   }
@@ -6958,7 +7008,7 @@ function arpgDrawBattle(){
   rect(18,16,330,70,'rgba(8,22,45,.82)');text(`${heroName}  HP ${Math.ceil(battle.heroHP)}/${progress.maxHP}`,32,39,17,'left','#fff',900);text(`MP ${Math.ceil(battle.heroMP)}/${progress.maxMP}`,32,65,15,'left','#bfe7ff',800);
   rect(180,31,150,11,'rgba(255,255,255,.18)');rect(180,31,150*Math.max(0,battle.heroHP/progress.maxHP),11,'#73d58a');rect(180,57,150,8,'rgba(255,255,255,.18)');rect(180,57,150*Math.max(0,battle.heroMP/progress.maxMP),8,'#76bce8');
   text('WASD / スティック：移動　J:短剣 K:氷結斬り L長押し:氷弾 H:回復',480,24,12,'center','#243852',700);
-  if(arpg.charging){const rate=Math.min(1,arpg.charge/1.15);rect(350,48,260,18,'rgba(20,40,65,.7)');rect(353,51,254*rate,12,'#bcefff');text(rate>=1?'MAX：広範囲氷魔法！':'氷弾チャージ中',480,80,13,'center','#23425c',900);}
+  if(arpg.charging){const rate=Math.min(1,arpg.charge/1.15);rect(350,48,260,18,'rgba(20,40,65,.7)');rect(353,51,254*rate,12,'#bcefff');text(rate>=1?'MAX：氷晶波！':'氷弾チャージ中',480,80,13,'center','#23425c',900);}
   if(arpg.messageT>0)text(arpg.message,480,112,17,'center','#17334b',900);
   drawDamagePopups();
 }
@@ -6970,7 +7020,7 @@ function arpgBuildPanel(){
     html+=`<h3>${names[who]}　SP ${progress[arpgSPKey(who)]||0}</h3>`;const order=progress.arpgAI[who]||arpgDefaultAI()[who];
     order.forEach((act,i)=>{html+=`<div class="row"><span class="grow">優先${i+1}：${labels[act]}</span><button data-up="${who}:${i}">↑</button><button data-down="${who}:${i}">↓</button><button data-skill="${who}:${act}">強化 Lv.${arpgRank(who,act)}</button></div>`;});
   }
-  html+=`<h3>${heroName}　SP ${progress.sp||0}</h3>`;for(const [k,l] of Object.entries({attack:'短剣',iceSlash:'氷結斬り',iceShot:'氷弾/チャージ魔法',heal:'自己回復'})){const shownLv=k==='iceShot'?arpgIceShotRank():arpgRank('hero',k);html+=`<div class="row"><span class="grow">${l}</span><button data-skill="hero:${k}">強化 Lv.${shownLv}</button></div>`;}
+  html+=`<h3>${heroName}　SP ${progress.sp||0}</h3>`;for(const [k,l] of Object.entries({attack:'短剣',iceSlash:'氷結斬り',iceShot:'氷弾 / MAXチャージ：氷晶波',heal:'自己回復'})){const shownLv=k==='iceShot'?arpgIceShotRank():k==='iceSlash'?arpgIceSlashRank():arpgRank('hero',k);const max=(k==='iceSlash'||k==='iceShot')?4:5;const nextCost=shownLv>=max?'MAX':`次 SP${Math.max(2,shownLv+1)}`;html+=`<div class="row"><span class="grow">${l}</span><button data-skill="hero:${k}">Lv.${shownLv} / ${nextCost}</button></div>`;}
   if(yunoJoined){const plv=progress.yunoSkills?.windFlow||0;html+=`<div class="arpgSmall">ユーノ支援：風脈支援 Lv.${plv}（Lv1: 主人公MP +0.5/秒、Lv2: +0.9/秒）</div>`;}
   arpgPanel.innerHTML=html;document.getElementById('app').appendChild(arpgPanel);
   arpgPanel.querySelector('.arpgPanelClose').onclick=()=>{arpgPanel.remove();arpgPanel=null;};
