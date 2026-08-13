@@ -188,6 +188,18 @@ progress.gyouSkills.doubleThrust=Math.min(2,progress.gyouSkills.doubleThrust||0)
 if(progress.gyouSkills.earthBreath===undefined)progress.gyouSkills.earthBreath=0;
 progress.gyouSkills.earthBreath=Math.max(0,Math.min(2,progress.gyouSkills.earthBreath||0));
 
+// ARPG Ver.0.1.5: ターン制向けで役割がなくなったスキルを整理。
+// 既存セーブで習得済みだった場合は、使ったSPを一度だけ返却する。
+if(!progress.arpgSkillCleanup015){
+  const yHaste=progress.yunoSkills?.haste||0;
+  if(yHaste>0){progress.yunoSP=(progress.yunoSP||0)+3;progress.yunoSkills.haste=0;}
+  const sCounter=progress.suzuSkills?.counter||0;
+  if(sCounter>0){progress.suzuSP=(progress.suzuSP||0)+3;progress.suzuSkills.counter=0;progress.suzuSpentSP=Math.max(0,(progress.suzuSpentSP||0)-3);}
+  const gBreath=progress.gyouSkills?.earthBreath||0;
+  if(gBreath>0){progress.gyouSP=(progress.gyouSP||0)+(gBreath>=2?5:2);progress.gyouSkills.earthBreath=0;}
+  progress.arpgSkillCleanup015=true;
+}
+
 function yunoSkillCost(key,lv){
   const table={
     heal:[2,1,2], regen:[2,1,2], wind:[2,1,2],
@@ -1816,12 +1828,12 @@ function drawTitle(){
   const titleLeft='りすぺく島', titleA='A', titleRight='RPG';
   const totalW=ctx.measureText(titleLeft+titleA+titleRight).width;
   let tx=480-totalW/2;
-  for(const [part,col] of [[titleLeft,'#fff'],[titleA,'#65d8ff'],[titleRight,'#fff']]){
+  for(const [part,col] of [[titleLeft,'#fff'],[titleA,'#ff9a3d'],[titleRight,'#fff']]){
     ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillText(part,tx+2,78);
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.3',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.5',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態からスタート',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -2528,12 +2540,12 @@ function heroMagicFlowPower(v){
   return Math.floor(v*(1+rate*stacks));
 }
 function yunoPassiveMP(){
-  const lv=progress.yunoSkills?.windFlow||0;
-  return lv>=2?5:lv>=1?3:0;
+  // Ver.0.1.5以降はユーノ自身ではなく、ARPG中の主人公MPを徐々に回復する。
+  return 0;
 }
 function gyouPassiveHP(){
-  const lv=progress.gyouSkills?.earthBreath||0;
-  return lv>=2?10:lv>=1?6:0;
+  // ARPGでは仲間にHPがないため、大地の息吹は廃止。
+  return 0;
 }
 function heroEquipAtk(){
   return heroStats().atk+(progress.shopBought?.heroManaBlade?10:0);
@@ -4322,8 +4334,7 @@ function drawMenu(){
         ['manaGuard','土脈吸収','被ダメージでMP回復'],
         ['healGuard','守りの呼吸','防御＋自分を回復'],
         ['doubleThrust','二段突き','槍で単体2回攻撃'],
-        ['counter','迎撃の構え','攻撃を受けて反撃'],
-        ['earthBreath','大地の息吹','パッシブ：毎ターンHP回復']
+        ['counter','迎撃の構え','攻撃を受けて反撃']
       ];
       gsks.forEach((s,i)=>{
         const key=s[0],col=i%4,row=Math.floor(i/4),x=35+col*225,y=238+row*103,lv=progress.gyouSkills[key]||0,max=gyouSkillMax(key),cost=gyouSkillCost(key,lv);
@@ -4340,9 +4351,9 @@ function drawMenu(){
       text(`ユーノ SP：${progress.yunoSP||0}`,55,215,18,'left','#d8fff5');
       const ysks=[
         ['heal','風の癒し','全体回復'],['regen','そよぎの輪','全体徐々に回復'],
-        ['wind','風刃嵐','敵全体攻撃'],['haste','疾風','1人を2回行動'],
-        ['mpRegenAll','風巡りの泉','全体MP徐々に回復'],['archery','二連射','Lv2で風纏三連射'],
-        ['windFlow','風巡の呼吸','パッシブ：毎ターンMP回復']
+        ['wind','風刃嵐','敵全体攻撃'],
+        ['mpRegenAll','風巡りの泉','主人公MP回復支援'],['archery','二連射','Lv2で風纏三連射'],
+        ['windFlow','風脈支援','主人公MPを時間経過で回復']
       ];
       ysks.forEach((s,i)=>{
         const key=s[0],col=i%4,row=Math.floor(i/4),x=35+col*225,y=245+row*105,lv=progress.yunoSkills[key]||0,max=yunoSkillMax(key);
@@ -4374,18 +4385,14 @@ function drawMenu(){
       text(`現在：Lv.${progress.suzuSkills?.all||0}`,855,285,15,'right','#703525');
 
       text('火炎斬りはLv2から二連斬。Lv3・Lv4は回数を増やさず一撃ずつ強化。',480,350,14,'center','#ffd5c6'); if(progress.hiddenSkillsUnlocked){outlineRect(710,455,180,55,progress.hiddenSkills?.suzu?'#ffe0d6':'#3b4653','#c95f48',2);text('紅蓮爆砕',800,477,15,'center',progress.hiddenSkills?.suzu?'#6b231d':'#fff',900);text(progress.hiddenSkills?.suzu?'習得済み':'SP100',800,499,12,'center','#ffe7a5');}
-      outlineRect(70,365,390,70,(progress.suzuSkills?.counter||0)>=1?'#ffe0d6':'#3b4653',(progress.suzuSkills?.counter||0)>=1?'#c95f48':'#7c8790',2);
-      text('炎返し',95,390,19,'left',(progress.suzuSkills?.counter||0)>=1?'#6b231d':'#d9dde0',800);
-      text('攻撃を受けた時に剣で反撃',95,414,13,'left',(progress.suzuSkills?.counter||0)>=1?'#8d4a3b':'#aab0b5');
-      text((progress.suzuSkills?.counter||0)>=1?'習得済み':'必要 SP3',435,414,12,'right',(progress.suzuSkills?.counter||0)>=1?'#7d3a2d':'#ffe7a5',800);
       {
         const fl=progress.suzuSkills?.fightingFlame||0;
-        outlineRect(500,365,390,70,fl?'#ffe7d1':'#3b4653',fl?'#e08a4e':'#7c8790',2);
-        text('闘炎（パッシブ）',525,390,18,'left',fl?'#6b2d1e':'#d9dde0',800);
-        text(fl>=2?'毎ターン攻撃+5% / 上限なし':fl===1?'毎ターン攻撃+3% / 上限なし':'長期戦ほど攻撃力上昇',525,414,12,'left',fl?'#8d4a3b':'#aab0b5');
-        text(fl>=2?'Lv.2 最大':fl===1?'次 Lv.2 SP3':'習得 SP2',865,414,11,'right',fl?'#8a4931':'#ffe7a5',800);
+        outlineRect(285,365,390,70,fl?'#ffe7d1':'#3b4653',fl?'#e08a4e':'#7c8790',2);
+        text('闘炎（パッシブ）',310,390,18,'left',fl?'#6b2d1e':'#d9dde0',800);
+        text(fl>=2?'ARPG：炎スキル威力 +12%':fl===1?'ARPG：炎スキル威力 +6%':'火炎斬り・範囲炎魔法を強化',310,414,12,'left',fl?'#8d4a3b':'#aab0b5');
+        text(fl>=2?'Lv.2 最大':fl===1?'次 Lv.2 SP3':'習得 SP2',650,414,11,'right',fl?'#8a4931':'#ffe7a5',800);
       }
-      text('闘炎は炎獣のグローブの毎ターン攻撃上昇と重複します。',480,470,14,'center','#ffffff');
+      text('反撃スキル「炎返し」はARPG化に合わせて廃止しました。',480,470,14,'center','#ffffff');
     }else{
       text(`スキルポイント：${progress.sp}`,55,212,21,'left','#ffe8a8');
 
@@ -4473,7 +4480,7 @@ function menuTap(x,y){
   if(menuPage==='skill' && menuCharacter==='gyou' && gyouJoinConfirmed && y>=238 && y<=430){
     const col=Math.floor((x-35)/225),row=Math.floor((y-238)/103);
     if(col>=0&&col<4&&row>=0&&row<2){
-      const keys=['fortify','cover','taunt','manaGuard','healGuard','doubleThrust','counter','earthBreath'];
+      const keys=['fortify','cover','taunt','manaGuard','healGuard','doubleThrust','counter'];
       const k=keys[row*4+col];
       if(!k)return;
       const lv=progress.gyouSkills[k]||0,max=gyouSkillMax(k);
@@ -4482,9 +4489,7 @@ function menuTap(x,y){
       if((progress.gyouSP||0)<cost){flashText=`ジュウのSPが足りない（必要 ${cost}）`;flashTimer=1.6;return;}
       progress.gyouSP-=cost;progress.gyouSkills[k]=lv+1;
       saveProgress();saveGame();
-      flashText=k==='earthBreath'
-        ?(lv===0?'パッシブ「大地の息吹」を習得！':'「大地の息吹」をLv.2に強化！')
-        :(lv===0?'ジュウが新しい守護技を習得！':`${k==='taunt'?'挑発':'二段突き'}をLv.2に強化！`);
+      flashText=(lv===0?'ジュウが新しい守護技を習得！':`${k==='taunt'?'挑発':'二段突き'}をLv.2に強化！`);
       flashTimer=1.8;return;
     }
   }
@@ -4492,14 +4497,14 @@ function menuTap(x,y){
   if(menuPage==='skill' && menuCharacter==='yuno' && yunoJoined && y>=245 && y<=455){
     const col=Math.floor((x-35)/225),row=Math.floor((y-245)/105);
     if(col>=0&&col<4&&row>=0&&row<2){
-      const keys=['heal','regen','wind','haste','mpRegenAll','archery','windFlow'];
+      const keys=['heal','regen','wind','mpRegenAll','archery','windFlow'];
       const k=keys[row*4+col];if(!k)return;
       const lv=progress.yunoSkills[k]||0,max=yunoSkillMax(k);
       if(lv>=max){flashText='このスキルは最大強化です';flashTimer=1.4;return;}
       const cost=yunoSkillCost(k,lv);
       if((progress.yunoSP||0)<cost){flashText=`ユーノのSPが足りない（必要 ${cost}）`;flashTimer=1.6;return;}
       progress.yunoSP-=cost;progress.yunoSkills[k]=lv+1;saveProgress();saveGame();
-      flashText=k==='windFlow'?(lv?'「風巡の呼吸」をLv.2に強化！':'パッシブ「風巡の呼吸」を習得！'):k==='archery'?(lv?'「風纏三連射」に強化！':'「二連射」を習得！'):(lv===0?'ユーノが新しい風術を習得！':'風術を強化！');
+      flashText=k==='windFlow'?(lv?'「風脈支援」をLv.2に強化！':'パッシブ「風脈支援」を習得！'):k==='archery'?(lv?'「風纏三連射」に強化！':'「二連射」を習得！'):(lv===0?'ユーノが新しい風術を習得！':'風術を強化！');
       flashTimer=1.8;return;
     }
   }
@@ -4532,13 +4537,7 @@ function menuTap(x,y){
   }
 
   if(menuPage==='skill' && menuCharacter==='suzu' && (suzumaruActive||suzumaruJoined) && y>=365 && y<=435){
-    if(x>=70&&x<=460){
-      if((progress.suzuSkills?.counter||0)>=1){flashText='炎返しは習得済みです';flashTimer=1.4;return;}
-      if((progress.suzuSP||0)<3){flashText='SPが足りない（必要 3）';flashTimer=1.6;return;}
-      progress.suzuSP-=3;progress.suzuSkills.counter=1;progress.suzuSpentSP=(progress.suzuSpentSP||0)+3;
-      saveProgress();saveGame();flashText='スズマルが「炎返し」を習得！';flashTimer=2;return;
-    }
-    if(x>=500&&x<=890){
+    if(x>=285&&x<=675){
       const lv=progress.suzuSkills?.fightingFlame||0;
       if(lv>=2){flashText='闘炎は最大強化です';flashTimer=1.4;return;}
       const cost=lv===0?2:3;
@@ -4594,6 +4593,7 @@ function menuTap(x,y){
       if(idx>lv){flashText='ひとつ前の技を先に習得してください';flashTimer=1.6;return true;}
       if(progress.sp<cost){flashText=`SPが足りない（必要 ${cost}）`;flashTimer=1.7;return true;}
       progress.sp-=cost;progress[key]=lv+1;if(route==='all')progress.heroIceWave=true;
+      if(route==='random'){progress.arpgSkills ||= {};progress.arpgSkills.hero ||= {};progress.arpgSkills.hero.iceShot=Math.max(progress.arpgSkills.hero.iceShot||1,Math.min(4,progress[key]+1));}
       saveProgress();saveGame();flashText=`「${name}」を習得！`;flashTimer=2;return true;
     };
     if(y>=356&&y<=414){
@@ -6656,7 +6656,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1.2
+// ARPG PROTOTYPE Ver.0.1.5
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
@@ -6684,12 +6684,22 @@ function arpgEnsureProgress(){
     gyou:{spear:1,shield:1}
   };
   progress.arpgAI ||= arpgDefaultAI();
+  const defaults=arpgDefaultAI();
+  for(const who of ['suzu','yuno','gyou']){
+    if(!Array.isArray(progress.arpgAI[who]) || !progress.arpgAI[who].length)progress.arpgAI[who]=[...defaults[who]];
+  }
   for(const [who,skills] of Object.entries({hero:['attack','iceSlash','iceShot','heal'],suzu:['sword','fireSlash','fireArea'],yuno:['bow','windArea','heal','mpHeal'],gyou:['spear','shield']})){
     progress.arpgSkills[who] ||= {};
     for(const k of skills) if(!progress.arpgSkills[who][k]) progress.arpgSkills[who][k]=1;
   }
 }
 function arpgRank(who,key){arpgEnsureProgress();return progress.arpgSkills?.[who]?.[key]||1;}
+function arpgIceShotRank(){
+  // 旧スキルツリーの「氷つぶて乱射II/III/IV」もARPG氷弾の強化として扱う。
+  const arpgLv=arpgRank('hero','iceShot');
+  const legacyLv=Math.min(4,(progress.heroPebbleRandom||0)+1);
+  return Math.max(arpgLv,legacyLv);
+}
 function arpgSPKey(who){return who==='hero'?'sp':who==='suzu'?'suzuSP':who==='yuno'?'yunoSP':'gyouSP';}
 function arpgSpendSP(who,key){
   arpgEnsureProgress(); const spk=arpgSPKey(who),lv=arpgRank(who,key);
@@ -6702,9 +6712,12 @@ function arpgEnemySource(){
   return [{name:battle.enemyName||'敵',kind:battle.enemyKind||'pirate',hp:battle.enemyHP||1,maxHP:battle.enemyMaxHP||battle.enemyHP||1,id:battle.monsterId}];
 }
 function arpgPartyEnabled(who){
-  if(who==='suzu') return !!(suzumaruActive && !battle.soloHero && (battle.monsterId===99||battle.monsterId>=200));
-  if(who==='yuno') return !!(yunoJoined && !battle.soloHero && battle.monsterId>=400);
-  if(who==='gyou') return !!(gyouJoinConfirmed && !battle.soloHero && battle.monsterId>=400);
+  // ARPGでは、物語上すでに加入している仲間は戦闘IDに関係なく参加する。
+  // soloHero が明示された特殊戦だけ主人公単独にする。
+  if(!battle || battle.soloHero)return false;
+  if(who==='suzu') return !!(suzumaruJoined || suzumaruActive);
+  if(who==='yuno') return !!yunoJoined;
+  if(who==='gyou') return !!(gyouJoined || gyouJoinConfirmed);
   return true;
 }
 function arpgInit(){
@@ -6780,7 +6793,7 @@ function arpgUseA(){
 function arpgBeginB(){if(!arpg||arpg.cd.b>0||arpg.winTimer||arpg.loseTimer)return;arpg.charging=true;arpg.charge=0;}
 function arpgReleaseB(){
   if(!arpg||!arpg.charging)return;const c=arpg.charge;arpg.charging=false;arpg.charge=0;const maxed=c>=1.15,cost=maxed?14:8;if(!arpgSpendMP(cost))return;
-  const lv=arpgRank('hero','iceShot'),shotCount=lv<=1?1:lv===2?3:lv===3?5:7;const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y);
+  const lv=arpgIceShotRank(),shotCount=lv<=1?1:lv===2?3:lv===3?5:7;const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y);
   const dx=e?e.x-arpg.hero.x:arpg.hero.face,dy=e?e.y-arpg.hero.y:0,baseAng=Math.atan2(dy,dx);
   const spread=(maxed?Math.PI/5:Math.PI/7),speed=maxed?390:420;
   for(let i=0;i<shotCount;i++){
@@ -6798,8 +6811,8 @@ function arpgAllyTry(who,action){
   const a=arpg.allies[who],e=arpgNearestEnemy(a.x,a.y); if(!a||!e&& !['heal','mpHeal','shield'].includes(action))return false;
   const lv=arpgRank(who,action);
   if(action==='sword'&&a.cd.sword<=0&&Math.hypot(e.x-a.x,e.y-a.y)<120){arpgDamageEnemy(e,8+(progress.level||1)*1.0+lv*3);a.cd.sword=.7;return true;}
-  if(action==='fireSlash'&&a.cd.fireSlash<=0&&Math.hypot(e.x-a.x,e.y-a.y)<150){arpgDamageEnemy(e,15+(progress.level||1)*1.25+lv*5,'fire');a.cd.fireSlash=Math.max(2.4,4.6-lv*.2);return true;}
-  if(action==='fireArea'&&a.cd.fireArea<=0){const near=arpg.enemies.filter(x=>x.src.hp>0&&Math.hypot(x.x-a.x,x.y-a.y)<210);if(near.length>=2|| (near.length&&Math.random()<.2)){near.forEach(x=>arpgDamageEnemy(x,12+(progress.level||1)+lv*4,'fire'));a.cd.fireArea=Math.max(4.5,7.8-lv*.25);return true;}}
+  if(action==='fireSlash'&&a.cd.fireSlash<=0&&Math.hypot(e.x-a.x,e.y-a.y)<150){const fm=1+(progress.suzuSkills?.fightingFlame||0)*.06;arpgDamageEnemy(e,(15+(progress.level||1)*1.25+lv*5)*fm,'fire');a.cd.fireSlash=Math.max(2.4,4.6-lv*.2);return true;}
+  if(action==='fireArea'&&a.cd.fireArea<=0){const near=arpg.enemies.filter(x=>x.src.hp>0&&Math.hypot(x.x-a.x,x.y-a.y)<210);if(near.length>=2|| (near.length&&Math.random()<.2)){const fm=1+(progress.suzuSkills?.fightingFlame||0)*.06;near.forEach(x=>arpgDamageEnemy(x,(12+(progress.level||1)+lv*4)*fm,'fire'));a.cd.fireArea=Math.max(4.5,7.8-lv*.25);return true;}}
   if(action==='bow'&&a.cd.bow<=0){arpgDamageEnemy(e,7+(progress.level||1)*.75+lv*2);a.cd.bow=1.05;return true;}
   if(action==='windArea'&&a.cd.windArea<=0){const near=arpg.enemies.filter(x=>x.src.hp>0&&Math.hypot(x.x-a.x,x.y-a.y)<260);if(near.length>=2||Math.random()<.12){near.forEach(x=>arpgDamageEnemy(x,10+(progress.level||1)*.8+lv*3));a.cd.windArea=Math.max(5,8.2-lv*.24);return true;}}
   if(action==='heal'&&a.cd.heal<=0&&battle.heroHP/progress.maxHP<(.55+lv*.025)){arpgHealHero(progress.maxHP*(.15+lv*.04)+5,'ユーノの癒し');a.cd.heal=Math.max(5.4,9-lv*.3);return true;}
@@ -6809,11 +6822,48 @@ function arpgAllyTry(who,action){
   return false;
 }
 function arpgUpdateAlly(who,dt){
-  if(!arpgPartyEnabled(who))return;const a=arpg.allies[who];for(const k in a.cd)a.cd[k]=Math.max(0,a.cd[k]-dt);if(a.shield)a.shield=Math.max(0,a.shield-dt);
-  const offsets={suzu:[-58,58],yuno:[-92,-55],gyou:[-35,-62]}[who];const tx=arpg.hero.x+offsets[0],ty=arpg.hero.y+offsets[1];const d=Math.hypot(tx-a.x,ty-a.y);if(d>8){a.x+=(tx-a.x)/d*Math.min(d,145*dt);a.y+=(ty-a.y)/d*Math.min(d,145*dt);}
-  a.think-=dt;if(a.think>0)return;a.think=.28+Math.random()*.62; // hesitation prevents cooldown-perfect machine behavior
+  if(!arpgPartyEnabled(who))return;
+  const a=arpg.allies[who];
+  for(const k in a.cd)a.cd[k]=Math.max(0,a.cd[k]-dt);
+  if(a.shield)a.shield=Math.max(0,a.shield-dt);
+
+  const e=arpgNearestEnemy(a.x,a.y);
+  const follow={suzu:[-58,58],yuno:[-92,-55],gyou:[-35,-62]}[who];
+  let tx=arpg.hero.x+follow[0],ty=arpg.hero.y+follow[1],speed=150;
+
+  if(e){
+    const ex=e.x-a.x,ey=e.y-a.y,ed=Math.max(1,Math.hypot(ex,ey));
+    const hx=e.x-arpg.hero.x,hy=e.y-arpg.hero.y,hd=Math.max(1,Math.hypot(hx,hy));
+    if(who==='suzu'){
+      // 前衛。敵へ踏み込み、剣と火炎斬りが届く距離を保つ。
+      if(ed>92){tx=e.x-ex/ed*72;ty=e.y-ey/ed*72;speed=188;}
+    }else if(who==='yuno'){
+      // 後衛。主人公から離れすぎず、敵とは弓向けの間合いを取る。
+      if(ed<145){tx=a.x-ex/ed*105;ty=a.y-ey/ed*105;speed=174;}
+      else if(ed>245){tx=e.x-ex/ed*205;ty=e.y-ey/ed*205;speed=165;}
+      else{
+        a.strafeT=(a.strafeT||0)-dt;
+        if(a.strafeT<=0){a.strafeT=.65+Math.random()*1.1;a.strafeDir=Math.random()<.5?-1:1;}
+        tx=a.x+(-ey/ed)*(a.strafeDir||1)*26;ty=a.y+(ex/ed)*(a.strafeDir||1)*26;
+      }
+      if(Math.hypot(a.x-arpg.hero.x,a.y-arpg.hero.y)>235){tx=arpg.hero.x+follow[0];ty=arpg.hero.y+follow[1];}
+    }else if(who==='gyou'){
+      // 盾役。主人公と敵の間へ先回りし、危険が薄ければ槍の間合いへ。
+      if(hd<230){tx=arpg.hero.x+hx/hd*48;ty=arpg.hero.y+hy/hd*48;speed=190;}
+      else if(ed>118){tx=e.x-ex/ed*96;ty=e.y-ey/ed*96;speed=172;}
+    }
+  }
+
+  const d=Math.hypot(tx-a.x,ty-a.y);
+  if(d>5){a.x+=(tx-a.x)/d*Math.min(d,speed*dt);a.y+=(ty-a.y)/d*Math.min(d,speed*dt);}
+  a.x=Math.max(45,Math.min(915,a.x));a.y=Math.max(120,Math.min(455,a.y));
+
+  a.think-=dt;
+  if(a.think>0)return;
+  a.think=.28+Math.random()*.62; // cooldown明け即使用にはせず、判断の間を作る
   if(Math.random()<.16)return;
-  const order=progress.arpgAI?.[who]||arpgDefaultAI()[who];for(const act of order){if(arpgAllyTry(who,act))break;}
+  const order=progress.arpgAI?.[who]||arpgDefaultAI()[who];
+  for(const act of order){if(arpgAllyTry(who,act))break;}
 }
 function arpgEnemyHitHero(e,base){
   const g=arpg.allies.gyou,guarding=arpgPartyEnabled('gyou')&&g.shield>0&&Math.hypot(g.x-arpg.hero.x,g.y-arpg.hero.y)<105;
@@ -6830,6 +6880,14 @@ function arpgUpdate(dt){
   touchUI.classList.remove('hidden');actionBtn.classList.add('hidden');arpgButtons.classList.remove('hidden');
   if(arpg.messageT>0)arpg.messageT-=dt;if(arpg.hero.inv>0)arpg.hero.inv-=dt;for(const k in arpg.cd)arpg.cd[k]=Math.max(0,arpg.cd[k]-dt);
   if(arpg.charging)arpg.charge=Math.min(1.4,arpg.charge+dt);
+  // ユーノ「風脈支援」：ARPG中、主人公のMPを少しずつ回復。
+  if(arpgPartyEnabled('yuno')){
+    const plv=progress.yunoSkills?.windFlow||0;
+    if(plv>0 && battle.heroMP<progress.maxMP){
+      arpg.mpRegenAcc+=(plv>=2?0.9:0.5)*dt;
+      if(arpg.mpRegenAcc>=1){const gain=Math.floor(arpg.mpRegenAcc);arpg.mpRegenAcc-=gain;battle.heroMP=Math.min(progress.maxMP,battle.heroMP+gain);}
+    }
+  }
   if(arpg.hero.dash&&!arpg.winTimer&&!arpg.loseTimer){
     const d=arpg.hero.dash,step=d.dist/d.total*dt,oldX=arpg.hero.x,oldY=arpg.hero.y;
     arpg.hero.x+=d.dx*step;arpg.hero.y+=d.dy*step;d.time+=dt;d.trailT-=dt;
@@ -6912,7 +6970,8 @@ function arpgBuildPanel(){
     html+=`<h3>${names[who]}　SP ${progress[arpgSPKey(who)]||0}</h3>`;const order=progress.arpgAI[who]||arpgDefaultAI()[who];
     order.forEach((act,i)=>{html+=`<div class="row"><span class="grow">優先${i+1}：${labels[act]}</span><button data-up="${who}:${i}">↑</button><button data-down="${who}:${i}">↓</button><button data-skill="${who}:${act}">強化 Lv.${arpgRank(who,act)}</button></div>`;});
   }
-  html+=`<h3>${heroName}　SP ${progress.sp||0}</h3>`;for(const [k,l] of Object.entries({attack:'短剣',iceSlash:'氷結斬り',iceShot:'氷弾/チャージ魔法',heal:'自己回復'}))html+=`<div class="row"><span class="grow">${l}</span><button data-skill="hero:${k}">強化 Lv.${arpgRank('hero',k)}</button></div>`;
+  html+=`<h3>${heroName}　SP ${progress.sp||0}</h3>`;for(const [k,l] of Object.entries({attack:'短剣',iceSlash:'氷結斬り',iceShot:'氷弾/チャージ魔法',heal:'自己回復'})){const shownLv=k==='iceShot'?arpgIceShotRank():arpgRank('hero',k);html+=`<div class="row"><span class="grow">${l}</span><button data-skill="hero:${k}">強化 Lv.${shownLv}</button></div>`;}
+  if(yunoJoined){const plv=progress.yunoSkills?.windFlow||0;html+=`<div class="arpgSmall">ユーノ支援：風脈支援 Lv.${plv}（Lv1: 主人公MP +0.5/秒、Lv2: +0.9/秒）</div>`;}
   arpgPanel.innerHTML=html;document.getElementById('app').appendChild(arpgPanel);
   arpgPanel.querySelector('.arpgPanelClose').onclick=()=>{arpgPanel.remove();arpgPanel=null;};
   arpgPanel.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>arpgMoveAI(b.dataset.up,-1));arpgPanel.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>arpgMoveAI(b.dataset.down,1));arpgPanel.querySelectorAll('[data-skill]').forEach(b=>b.onclick=()=>{const [w,k]=b.dataset.skill.split(':');arpgSpendSP(w,k);});
