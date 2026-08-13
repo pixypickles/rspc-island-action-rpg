@@ -1821,7 +1821,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.2',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.3',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態からスタート',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -6712,7 +6712,7 @@ function arpgInit(){
   const src=arpgEnemySource();
   const spots=[[690,210],[800,240],[650,325],[785,350],[860,300]];
   arpg={
-    battleRef:battle,hero:{x:250,y:310,face:1,inv:0},
+    battleRef:battle,hero:{x:250,y:310,face:1,inv:0,dash:null},
     enemies:src.map((e,i)=>({src:e,x:(spots[i]||[700+i*28,220+i*35])[0],y:(spots[i]||[700+i*28,220+i*35])[1],vx:0,vy:0,attackCd:.5+Math.random(),think:.2+Math.random()*.6,flash:0,slow:0})),
     allies:{
       suzu:{x:185,y:365,cd:{sword:0,fireSlash:0,fireArea:0},think:.5},
@@ -6760,17 +6760,34 @@ function arpgUseAttack(){
   sfx('slash');
   arpg.cd.attack=Math.max(.20,.36-arpgRank('hero','attack')*.018);
 }
+function arpgInputDir8(){
+  let dx=0,dy=0;
+  if(keys.ArrowLeft||keys.a||keys.A)dx--;if(keys.ArrowRight||keys.d||keys.D)dx++;
+  if(keys.ArrowUp||keys.w||keys.W)dy--;if(keys.ArrowDown||keys.s||keys.S)dy++;
+  dx+=touchVector.x;dy+=touchVector.y;
+  if(Math.hypot(dx,dy)<.12)return {x:arpg?.hero?.face||1,y:0};
+  const ang=Math.atan2(dy,dx),snap=Math.round(ang/(Math.PI/4))*(Math.PI/4);
+  return {x:Math.cos(snap),y:Math.sin(snap)};
+}
 function arpgUseA(){
-  if(!arpg||arpg.cd.a>0||arpg.winTimer||arpg.loseTimer)return;const cost=6;if(!arpgSpendMP(cost))return;
-  const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y,135);if(e){const lv=arpgRank('hero','iceSlash'),dmg=(progress.atk||8)*1.18+10+lv*5+Math.random()*6;arpgDamageEnemy(e,dmg,'ice');e.slow=1.2+.18*lv;arpg.hero.face=e.x>=arpg.hero.x?1:-1;}
-  arpg.cd.a=Math.max(1.5,3.0-arpgRank('hero','iceSlash')*.16);
+  if(!arpg||arpg.cd.a>0||arpg.winTimer||arpg.loseTimer||arpg.hero.dash)return;const cost=6;if(!arpgSpendMP(cost))return;
+  const lv=arpgRank('hero','iceSlash'),dir=arpgInputDir8();
+  if(Math.abs(dir.x)>.1)arpg.hero.face=dir.x>0?1:-1;
+  arpg.hero.dash={dx:dir.x,dy:dir.y,time:0,total:.16,dist:118+lv*7,hit:new Set(),trailT:0};
+  arpg.fx.push({type:'iceDashLine',x1:arpg.hero.x,y1:arpg.hero.y-8,x2:arpg.hero.x,y2:arpg.hero.y-8,age:0,life:.34});
+  arpg.cd.a=Math.max(1.5,3.0-lv*.16);sfx('ice');
 }
 function arpgBeginB(){if(!arpg||arpg.cd.b>0||arpg.winTimer||arpg.loseTimer)return;arpg.charging=true;arpg.charge=0;}
 function arpgReleaseB(){
   if(!arpg||!arpg.charging)return;const c=arpg.charge;arpg.charging=false;arpg.charge=0;const maxed=c>=1.15,cost=maxed?14:8;if(!arpgSpendMP(cost))return;
-  const lv=arpgRank('hero','iceShot');const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y);
-  const dx=e?e.x-arpg.hero.x:arpg.hero.face,dy=e?e.y-arpg.hero.y:0,l=Math.max(1,Math.hypot(dx,dy));
-  arpg.projectiles.push({x:arpg.hero.x,y:arpg.hero.y-8,vx:dx/l*420,vy:dy/l*420,r:maxed?54:16,life:1.8,dmg:(progress.atk||8)*(.8+(Math.min(c,1.2)*.6))+8+lv*4,area:maxed});
+  const lv=arpgRank('hero','iceShot'),shotCount=lv<=1?1:lv===2?3:lv===3?5:7;const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y);
+  const dx=e?e.x-arpg.hero.x:arpg.hero.face,dy=e?e.y-arpg.hero.y:0,baseAng=Math.atan2(dy,dx);
+  const spread=(maxed?Math.PI/5:Math.PI/7),speed=maxed?390:420;
+  for(let i=0;i<shotCount;i++){
+    const off=shotCount===1?0:(i-(shotCount-1)/2)*(spread/(shotCount-1)),a=baseAng+off;
+    arpg.projectiles.push({x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:maxed?54:16,life:1.8,dmg:(progress.atk||8)*(.8+(Math.min(c,1.2)*.6))+8+lv*4,area:maxed});
+  }
+  arpg.message=`氷弾 ×${shotCount}`;arpg.messageT=.9;
   arpg.cd.b=Math.max(1.2,2.5-lv*.14);sfx('ice');
 }
 function arpgUseC(){
@@ -6813,7 +6830,16 @@ function arpgUpdate(dt){
   touchUI.classList.remove('hidden');actionBtn.classList.add('hidden');arpgButtons.classList.remove('hidden');
   if(arpg.messageT>0)arpg.messageT-=dt;if(arpg.hero.inv>0)arpg.hero.inv-=dt;for(const k in arpg.cd)arpg.cd[k]=Math.max(0,arpg.cd[k]-dt);
   if(arpg.charging)arpg.charge=Math.min(1.4,arpg.charge+dt);
-  let dx=0,dy=0;if(keys.ArrowLeft||keys.a||keys.A)dx--;if(keys.ArrowRight||keys.d||keys.D)dx++;if(keys.ArrowUp||keys.w||keys.W)dy--;if(keys.ArrowDown||keys.s||keys.S)dy++;dx+=touchVector.x;dy+=touchVector.y;const l=Math.hypot(dx,dy);if(l>.05&&!arpg.winTimer&&!arpg.loseTimer){dx/=Math.max(1,l);dy/=Math.max(1,l);arpg.hero.x+=dx*205*dt;arpg.hero.y+=dy*205*dt;if(Math.abs(dx)>.15)arpg.hero.face=dx>0?1:-1;}
+  if(arpg.hero.dash&&!arpg.winTimer&&!arpg.loseTimer){
+    const d=arpg.hero.dash,step=d.dist/d.total*dt,oldX=arpg.hero.x,oldY=arpg.hero.y;
+    arpg.hero.x+=d.dx*step;arpg.hero.y+=d.dy*step;d.time+=dt;d.trailT-=dt;
+    if(d.trailT<=0){arpg.fx.push({type:'iceDashLine',x1:oldX,y1:oldY-8,x2:arpg.hero.x,y2:arpg.hero.y-8,age:0,life:.28});d.trailT=.018;}
+    const lv=arpgRank('hero','iceSlash');
+    for(const e of arpg.enemies){if(e.src.hp<=0||d.hit.has(e))continue;const vx=e.x-arpg.hero.x,vy=e.y-arpg.hero.y;if(Math.hypot(vx,vy)<58){d.hit.add(e);const dmg=(progress.atk||8)*1.18+10+lv*5+Math.random()*6;arpgDamageEnemy(e,dmg,'ice');e.slow=1.2+.18*lv;}}
+    if(d.time>=d.total)arpg.hero.dash=null;
+  }else{
+    let dx=0,dy=0;if(keys.ArrowLeft||keys.a||keys.A)dx--;if(keys.ArrowRight||keys.d||keys.D)dx++;if(keys.ArrowUp||keys.w||keys.W)dy--;if(keys.ArrowDown||keys.s||keys.S)dy++;dx+=touchVector.x;dy+=touchVector.y;const l=Math.hypot(dx,dy);if(l>.05&&!arpg.winTimer&&!arpg.loseTimer){dx/=Math.max(1,l);dy/=Math.max(1,l);arpg.hero.x+=dx*205*dt;arpg.hero.y+=dy*205*dt;if(Math.abs(dx)>.15)arpg.hero.face=dx>0?1:-1;}
+  }
   arpg.hero.x=Math.max(55,Math.min(905,arpg.hero.x));arpg.hero.y=Math.max(120,Math.min(455,arpg.hero.y));
   arpgUpdateAlly('suzu',dt);arpgUpdateAlly('yuno',dt);arpgUpdateAlly('gyou',dt);arpg.enemies.forEach(e=>arpgUpdateEnemy(e,dt));
   for(const f of arpg.fx)f.age+=dt;
@@ -6833,6 +6859,13 @@ function arpgDrawEnemy(e){
 }
 function arpgDrawCooldown(btn,x,y,cd,max,label){
   const ready=cd<=0;text(label,x,y,12,'center',ready?'#ffffff':'#a7b6c5',900);if(!ready)text(cd.toFixed(1),x,y+15,12,'center','#ffe8a8',800);
+}
+function arpgDrawIceDashLine(f){
+  const t=Math.max(0,Math.min(1,f.age/f.life)),a=1-t;
+  ctx.save();ctx.lineCap='round';
+  ctx.strokeStyle=`rgba(95,208,255,${.18+a*.48})`;ctx.lineWidth=13*a+2;ctx.beginPath();ctx.moveTo(f.x1,f.y1);ctx.lineTo(f.x2,f.y2);ctx.stroke();
+  ctx.strokeStyle=`rgba(224,250,255,${.2+a*.72})`;ctx.lineWidth=4*a+1;ctx.beginPath();ctx.moveTo(f.x1,f.y1);ctx.lineTo(f.x2,f.y2);ctx.stroke();
+  ctx.restore();
 }
 function arpgDrawDaggerArc(f){
   const t=Math.max(0,Math.min(1,f.age/f.life));
@@ -6861,7 +6894,7 @@ function arpgDrawBattle(){
   arpg.enemies.forEach(arpgDrawEnemy);
   if(arpgPartyEnabled('suzu'))drawSuzumaru(arpg.allies.suzu.x,arpg.allies.suzu.y,.82);if(arpgPartyEnabled('yuno'))drawYuno(arpg.allies.yuno.x,arpg.allies.yuno.y,.80);if(arpgPartyEnabled('gyou')){drawGyou(arpg.allies.gyou.x,arpg.allies.gyou.y,.80);if(arpg.allies.gyou.shield>0){ctx.strokeStyle='rgba(255,231,150,.8)';ctx.lineWidth=5;ctx.beginPath();ctx.arc(arpg.allies.gyou.x,arpg.allies.gyou.y-10,34,-1.2,1.2);ctx.stroke();}}
   ctx.save();if(arpg.hero.inv>0&&Math.floor(arpg.hero.inv*20)%2)ctx.globalAlpha=.45;drawHeroFox(arpg.hero.x,arpg.hero.y,.95);ctx.restore();
-  for(const f of arpg.fx)if(f.type==='daggerArc')arpgDrawDaggerArc(f);
+  for(const f of arpg.fx){if(f.type==='daggerArc')arpgDrawDaggerArc(f);else if(f.type==='iceDashLine')arpgDrawIceDashLine(f);}
   for(const p of arpg.projectiles){ctx.fillStyle='rgba(190,240,255,.85)';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#e8fbff';ctx.lineWidth=3;ctx.stroke();}
   // HUD
   rect(18,16,330,70,'rgba(8,22,45,.82)');text(`${heroName}  HP ${Math.ceil(battle.heroHP)}/${progress.maxHP}`,32,39,17,'left','#fff',900);text(`MP ${Math.ceil(battle.heroMP)}/${progress.maxMP}`,32,65,15,'left','#bfe7ff',800);
