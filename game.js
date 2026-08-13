@@ -6741,7 +6741,11 @@ function arpgRestoreMP(amount){
 function arpgSpendMP(cost){if((battle.heroMP||0)<cost){arpg.message='MPが足りない！';arpg.messageT=1;return false;}battle.heroMP-=cost;return true;}
 function arpgUseAttack(){
   if(scene!=='battle'||!battle)return;if(!arpg)arpgInit();if(arpg.cd.attack>0||arpg.winTimer||arpg.loseTimer)return;
-  const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y,92);if(e){const dmg=(progress.atk||8)*.75+4+arpgRank('hero','attack')*2+Math.random()*4;arpgDamageEnemy(e,dmg);arpg.hero.face=e.x>=arpg.hero.x?1:-1;}
+  const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y,92);
+  if(e){arpg.hero.face=e.x>=arpg.hero.x?1:-1;const dmg=(progress.atk||8)*.75+4+arpgRank('hero','attack')*2+Math.random()*4;arpgDamageEnemy(e,dmg);}
+  // Short dagger sweep: a fast semicircle around the hero with lingering afterimages.
+  arpg.fx.push({type:'daggerArc',x:arpg.hero.x,y:arpg.hero.y-8,face:arpg.hero.face,age:0,life:.22});
+  sfx('slash');
   arpg.cd.attack=Math.max(.20,.36-arpgRank('hero','attack')*.018);
 }
 function arpgUseA(){
@@ -6800,6 +6804,8 @@ function arpgUpdate(dt){
   let dx=0,dy=0;if(keys.ArrowLeft||keys.a||keys.A)dx--;if(keys.ArrowRight||keys.d||keys.D)dx++;if(keys.ArrowUp||keys.w||keys.W)dy--;if(keys.ArrowDown||keys.s||keys.S)dy++;dx+=touchVector.x;dy+=touchVector.y;const l=Math.hypot(dx,dy);if(l>.05&&!arpg.winTimer&&!arpg.loseTimer){dx/=Math.max(1,l);dy/=Math.max(1,l);arpg.hero.x+=dx*205*dt;arpg.hero.y+=dy*205*dt;if(Math.abs(dx)>.15)arpg.hero.face=dx>0?1:-1;}
   arpg.hero.x=Math.max(55,Math.min(905,arpg.hero.x));arpg.hero.y=Math.max(120,Math.min(455,arpg.hero.y));
   arpgUpdateAlly('suzu',dt);arpgUpdateAlly('yuno',dt);arpgUpdateAlly('gyou',dt);arpg.enemies.forEach(e=>arpgUpdateEnemy(e,dt));
+  for(const f of arpg.fx)f.age+=dt;
+  arpg.fx=arpg.fx.filter(f=>f.age<f.life);
   for(const p of arpg.projectiles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;for(const e of arpg.enemies){if(e.src.hp<=0||p.hit===e)continue;if(Math.hypot(p.x-e.x,p.y-e.y)<p.r+24){if(p.area){for(const q of arpg.enemies)if(q.src.hp>0&&Math.hypot(p.x-q.x,p.y-q.y)<p.r+60){arpgDamageEnemy(q,p.dmg,'ice');q.slow=1.8;}p.life=0;}else{arpgDamageEnemy(e,p.dmg,'ice');e.slow=1.4;p.life=0;}break;}}}
   arpg.projectiles=arpg.projectiles.filter(p=>p.life>0&&p.x>-80&&p.x<W+80&&p.y>-80&&p.y<H+80);
   if(!arpg.winTimer&&arpg.enemies.every(e=>e.src.hp<=0)){arpg.winTimer=.8;sfx('win');arpg.message='勝利！';arpg.messageT=2;}
@@ -6816,12 +6822,34 @@ function arpgDrawEnemy(e){
 function arpgDrawCooldown(btn,x,y,cd,max,label){
   const ready=cd<=0;text(label,x,y,12,'center',ready?'#ffffff':'#a7b6c5',900);if(!ready)text(cd.toFixed(1),x,y+15,12,'center','#ffe8a8',800);
 }
+function arpgDrawDaggerArc(f){
+  const t=Math.max(0,Math.min(1,f.age/f.life));
+  // Sweep from upper-front to lower-front. face mirrors the semicircle left/right.
+  const start=-1.35, sweep=Math.PI*0.96, head=start+sweep*Math.min(1,t*1.35);
+  ctx.save();ctx.translate(f.x,f.y);ctx.scale(f.face,1);
+  // Layered trailing arcs create the lingering blade-afterimage rather than a flat flash.
+  for(let i=0;i<5;i++){
+    const lag=i*.13,local=Math.max(0,Math.min(1,t-lag));if(local<=0)continue;
+    const end=start+sweep*Math.min(1,local*1.35),alpha=(1-t)*(.46-i*.055)+.08;
+    ctx.beginPath();ctx.strokeStyle=`rgba(220,247,255,${Math.max(.04,alpha)})`;ctx.lineWidth=Math.max(2,9-i*1.35);ctx.lineCap='round';
+    ctx.arc(0,0,42+i*2,start,end);ctx.stroke();
+  }
+  // Dagger blade at the leading edge of the swing.
+  const a=head,r=46,px=Math.cos(a)*r,py=Math.sin(a)*r;
+  ctx.translate(px,py);ctx.rotate(a+Math.PI/2);
+  ctx.fillStyle=`rgba(245,252,255,${Math.max(.18,1-t*.7)})`;
+  ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(5,3);ctx.lineTo(0,8);ctx.lineTo(-5,3);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(70,85,105,.88)';ctx.fillRect(-7,7,14,4);ctx.fillRect(-3,10,6,10);
+  ctx.restore();
+}
+
 function arpgDrawBattle(){
   if(!battle)return;if(!arpg)arpgInit();const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#9cd8ef');g.addColorStop(1,'#b7d88d');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);rect(0,390,W,150,'#8eb96f');
   for(let x=40;x<W;x+=110)ellipse(x,420+(x%3)*18,45,10,'rgba(70,110,60,.16)');
   arpg.enemies.forEach(arpgDrawEnemy);
   if(arpgPartyEnabled('suzu'))drawSuzumaru(arpg.allies.suzu.x,arpg.allies.suzu.y,.82);if(arpgPartyEnabled('yuno'))drawYuno(arpg.allies.yuno.x,arpg.allies.yuno.y,.80);if(arpgPartyEnabled('gyou')){drawGyou(arpg.allies.gyou.x,arpg.allies.gyou.y,.80);if(arpg.allies.gyou.shield>0){ctx.strokeStyle='rgba(255,231,150,.8)';ctx.lineWidth=5;ctx.beginPath();ctx.arc(arpg.allies.gyou.x,arpg.allies.gyou.y-10,34,-1.2,1.2);ctx.stroke();}}
   ctx.save();if(arpg.hero.inv>0&&Math.floor(arpg.hero.inv*20)%2)ctx.globalAlpha=.45;drawHeroFox(arpg.hero.x,arpg.hero.y,.95);ctx.restore();
+  for(const f of arpg.fx)if(f.type==='daggerArc')arpgDrawDaggerArc(f);
   for(const p of arpg.projectiles){ctx.fillStyle='rgba(190,240,255,.85)';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#e8fbff';ctx.lineWidth=3;ctx.stroke();}
   // HUD
   rect(18,16,330,70,'rgba(8,22,45,.82)');text(`${heroName}  HP ${Math.ceil(battle.heroHP)}/${progress.maxHP}`,32,39,17,'left','#fff',900);text(`MP ${Math.ceil(battle.heroMP)}/${progress.maxMP}`,32,65,15,'left','#bfe7ff',800);
@@ -6830,7 +6858,7 @@ function arpgDrawBattle(){
   if(arpg.charging){const rate=Math.min(1,arpg.charge/1.15);rect(350,48,260,18,'rgba(20,40,65,.7)');rect(353,51,254*rate,12,'#bcefff');text(rate>=1?'MAX：広範囲氷魔法！':'氷弾チャージ中',480,80,13,'center','#23425c',900);}
   if(arpg.messageT>0)text(arpg.message,480,112,17,'center','#17334b',900);
   drawDamagePopups();
-  arpgDrawCooldown(null,885,455,arpg.cd.attack,.36,'短剣');arpgDrawCooldown(null,805,455,arpg.cd.a,3,'氷結斬り');arpgDrawCooldown(null,845,375,arpg.cd.b,2.5,'氷弾');arpgDrawCooldown(null,760,382,arpg.cd.c,8,'回復');
+  arpgDrawCooldown(null,760,382,arpg.cd.attack,.36,'短剣');arpgDrawCooldown(null,805,455,arpg.cd.a,3,'氷結斬り');arpgDrawCooldown(null,845,375,arpg.cd.b,2.5,'氷弾');arpgDrawCooldown(null,885,455,arpg.cd.c,8,'回復');
 }
 function arpgBuildPanel(){
   arpgEnsureProgress();if(arpgPanel)arpgPanel.remove();arpgPanel=document.createElement('div');arpgPanel.id='arpgPanel';
