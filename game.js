@@ -1809,7 +1809,19 @@ function drawTitle(){
   [['🎪',480,138],['💧',270,270],['🔥',350,410],['🌪️',612,410],['🪨',690,270]].forEach(([a,x,y])=>text(a,x,y,30,'center'));
   ctx.strokeStyle='rgba(255,255,255,.72)';ctx.lineWidth=3;ctx.setLineDash([7,6]);
   ctx.beginPath();ctx.moveTo(455,160);ctx.lineTo(300,245);ctx.lineTo(340,370);ctx.stroke();ctx.setLineDash([]);
-  text('りすぺく島RPG',480,75,53,'center','#fff',800);text('Ver.1.35',480,121,18,'center','#eef8ff');
+  // ARPG版タイトル。Aだけ氷色で強調する。
+  ctx.save();
+  ctx.font='800 53px system-ui,-apple-system,"Yu Gothic",sans-serif';
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  const titleLeft='りすぺく島', titleA='A', titleRight='RPG';
+  const totalW=ctx.measureText(titleLeft+titleA+titleRight).width;
+  let tx=480-totalW/2;
+  for(const [part,col] of [[titleLeft,'#fff'],[titleA,'#65d8ff'],[titleRight,'#fff']]){
+    ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillText(part,tx+2,78);
+    ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
+  }
+  ctx.restore();
+  text('Ver.0.1.2',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態からスタート',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -6644,7 +6656,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1
+// ARPG PROTOTYPE Ver.0.1.2
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
@@ -6858,7 +6870,6 @@ function arpgDrawBattle(){
   if(arpg.charging){const rate=Math.min(1,arpg.charge/1.15);rect(350,48,260,18,'rgba(20,40,65,.7)');rect(353,51,254*rate,12,'#bcefff');text(rate>=1?'MAX：広範囲氷魔法！':'氷弾チャージ中',480,80,13,'center','#23425c',900);}
   if(arpg.messageT>0)text(arpg.message,480,112,17,'center','#17334b',900);
   drawDamagePopups();
-  arpgDrawCooldown(null,760,382,arpg.cd.attack,.36,'短剣');arpgDrawCooldown(null,805,455,arpg.cd.a,3,'氷結斬り');arpgDrawCooldown(null,845,375,arpg.cd.b,2.5,'氷弾');arpgDrawCooldown(null,885,455,arpg.cd.c,8,'回復');
 }
 function arpgBuildPanel(){
   arpgEnsureProgress();if(arpgPanel)arpgPanel.remove();arpgPanel=document.createElement('div');arpgPanel.id='arpgPanel';
