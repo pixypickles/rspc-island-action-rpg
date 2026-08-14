@@ -1847,7 +1847,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.22',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.23',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態へリセット',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -6670,7 +6670,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1.22
+// ARPG PROTOTYPE Ver.0.1.23
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
@@ -6731,6 +6731,10 @@ function arpgIceShotRank(){
   const arpgLv=arpgRank('hero','iceShot');
   const legacyLv=Math.min(4,(progress.heroPebbleRandom||0)+1);
   return Math.max(arpgLv,legacyLv);
+}
+function arpgIceWaveChargeTime(){
+  // 九尾装備中は氷晶波／デスブリザードへの最大チャージ時間を短縮。
+  return progress.nineTailGear?0.75:1.15;
 }
 function arpgSPKey(who){return who==='hero'?'sp':who==='suzu'?'suzuSP':who==='yuno'?'yunoSP':'gyouSP';}
 function arpgSpendSP(who,key){
@@ -6839,7 +6843,7 @@ function arpgInit(){
       gyou:{x:210,y:235,cd:{spear:0,cover:0,taunt:0,shieldBash:0,doubleThrust:0,ultimate:0},think:.4,shield:0,taunt:0,ultGuard:0,thrustSeq:null}
     },
     cd:{attack:0,a:0,b:0,c:0},charge:0,charging:false,projectiles:[],fx:[],winTimer:0,loseTimer:0,message:'リアルタイム戦闘！',messageT:2.2,partySpeedBuff:0,partySpeedMul:1,
-    battleTime:0,waveQueue:arpgMakeWaveQueue(src)
+    battleTime:0,waveQueue:arpgMakeWaveQueue(src),autoItemCd:0
   };
   battle.heroHP=Math.min(battle.heroHP??progress.maxHP,progress.maxHP);
   battle.heroMP=Math.min(battle.heroMP??progress.maxMP,progress.maxMP);
@@ -6930,13 +6934,14 @@ function arpgUseA(){
   arpgDashTargetSegment(arpg.hero.dash);
   const equiv=count*(progress.nineTailGear?3:1);
   arpg.message=progress.nineTailGear?`九尾・氷結斬り ${count}閃／${equiv}撃`:(count>1?`氷結斬り ×${count}`:'氷結斬り！');arpg.messageT=.8;
-  arpg.cd.a=Math.max(1.5,3.0-lv*.16);sfx('ice');
+  const baseCdA=Math.max(1.5,3.0-lv*.16);
+  arpg.cd.a=baseCdA*(progress.nineTailGear?0.62:1);sfx('ice');
 }
 function arpgBeginB(){if(!arpg||arpg.cd.b>0||arpg.winTimer||arpg.loseTimer)return;arpg.charging=true;arpg.charge=0;}
 function arpgReleaseB(){
   if(!arpg||!arpg.charging)return;
   const c=arpg.charge;arpg.charging=false;arpg.charge=0;
-  const maxed=c>=1.15,cost=maxed?14:8;if(!arpgSpendMP(cost))return;
+  const maxed=c>=arpgIceWaveChargeTime(),cost=maxed?14:8;if(!arpgSpendMP(cost))return;
   const lv=arpgIceShotRank(),e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y);
   const dx=e?e.x-arpg.hero.x:arpg.hero.face,dy=e?e.y-arpg.hero.y:0,baseAng=Math.atan2(dy,dx);
   if(Math.abs(dx)>.1)arpg.hero.face=dx>0?1:-1;
@@ -6965,11 +6970,13 @@ function arpgReleaseB(){
     offsets.sort((a,b)=>a-b);
     for(const offset of offsets){
       const a=baseAng+offset,speed=440+Math.random()*45;
-      arpg.projectiles.push({type:'iceCrystal',x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:9,life:1.8,dmg:(progress.atk||8)*(1.12+(Math.min(c,1.2)*.72))+14+lv*6,area:false});
+      const shotDmg=((progress.atk||8)*(1.12+(Math.min(c,1.2)*.72))+14+lv*6)*(progress.nineTailGear?2:1);
+      arpg.projectiles.push({type:'iceCrystal',x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:9,life:1.8,dmg:shotDmg,area:false});
     }
     arpg.message=`氷弾 ×${shotCount}`;arpg.messageT=.9;
   }
-  arpg.cd.b=Math.max(1.2,2.5-lv*.14);sfx('ice');
+  const baseCdB=Math.max(1.2,2.5-lv*.14);
+  arpg.cd.b=baseCdB*(progress.nineTailGear?0.65:1);sfx('ice');
 }
 function arpgUseC(){
   if(!arpg||arpg.cd.c>0||arpg.winTimer||arpg.loseTimer)return;const cost=12;if(!arpgSpendMP(cost))return;
@@ -6999,7 +7006,7 @@ function arpgAllyTry(who,action){
     // 紅蓮爆砕：CTが明けても空振りせず、敵が有効距離まで来た時だけ即発動する。
     for(let wave=0;wave<3;wave++){
       const mult=[1.08,.92,.78][wave];
-      for(const x of live) arpgDamageEnemy(x,(ss.atk*1.45+40+(progress.level||1)*2.2)*fm*mult,'fire');
+      for(const x of live) arpgDamageEnemy(x,(ss.atk*1.45+40+(progress.level||1)*2.2)*fm*mult*1.5,'fire');
     }
     arpg.fx.push({type:'suzuUltimate',x:a.x,y:a.y-12,age:0,life:.95,maxR:300});
     arpg.fx.push({type:'suzuFireArc',x:a.x,y:a.y-10,face:a.face,age:0,life:.48,r:108,ultimate:true});
@@ -7148,6 +7155,14 @@ function arpgUpdate(dt){
   arpg.battleTime=(arpg.battleTime||0)+dt;
   // Ver.0.1.15: 主人公は戦闘中、標準でMPが少しずつ自然回復する。水脈循環で回復量を強化。
   {const ml=progress.heroManaSkill||0,regen=0.70*(ml>=2?2.0:ml>=1?1.5:1.0);arpg.mpRegenCarry=(arpg.mpRegenCarry||0)+regen*dt;if(arpg.mpRegenCarry>=1&&battle.heroMP<progress.maxMP){const gain=Math.floor(arpg.mpRegenCarry);arpg.mpRegenCarry-=gain;battle.heroMP=Math.min(progress.maxMP,battle.heroMP+gain);}}
+  // 回復薬／高級回復薬は操作ボタンを持たないため、HP10%以下で自動使用。
+  arpg.autoItemCd=Math.max(0,(arpg.autoItemCd||0)-dt);
+  if(battle.heroHP>0&&battle.heroHP<=progress.maxHP*.10&&arpg.autoItemCd<=0){
+    let heal=0,label='';
+    if((progress.items.highPotion||0)>0){progress.items.highPotion--;heal=70;label='高級回復薬';}
+    else if((progress.items.potion||0)>0){progress.items.potion--;heal=25;label='回復薬';}
+    if(heal>0){const before=battle.heroHP;battle.heroHP=Math.min(progress.maxHP,battle.heroHP+heal);const got=Math.round(battle.heroHP-before);saveProgress();addDamagePopup(`+${got}`,arpg.hero.x,arpg.hero.y-44,'#91f2d7');arpg.message=`${label}を自動使用！ HP+${got}`;arpg.messageT=1.5;arpg.autoItemCd=1.0;sfx('heal');}
+  }
   while(arpg.waveQueue&&arpg.waveQueue.length&&arpg.waveQueue[0].time<=arpg.battleTime){arpgSpawnReinforcement(arpg.waveQueue.shift());}
   if(arpg.charging)arpg.charge=Math.min(1.4,arpg.charge+dt);
   if(arpg.partySpeedBuff>0){arpg.partySpeedBuff=Math.max(0,arpg.partySpeedBuff-dt);if(arpg.partySpeedBuff<=0)arpg.partySpeedMul=1;}
@@ -7155,7 +7170,7 @@ function arpgUpdate(dt){
     const d=arpg.hero.dash,step=d.dist/d.total*dt;
     arpg.hero.x+=d.dx*step;arpg.hero.y+=d.dy*step;d.time+=dt;
     const lv=arpgIceSlashRank();
-    for(const e of arpg.enemies){if(e.src.hp<=0||d.hit.has(e))continue;const vx=e.x-arpg.hero.x,vy=e.y-arpg.hero.y;if(Math.hypot(vx,vy)<58){d.hit.add(e);const dmg=(progress.atk||8)*1.08+9+lv*4+Math.random()*6;arpgDamageEnemy(e,dmg*(progress.nineTailGear?3:1),'ice');e.slow=1.2+.18*lv;}}
+    for(const e of arpg.enemies){if(e.src.hp<=0||d.hit.has(e))continue;const vx=e.x-arpg.hero.x,vy=e.y-arpg.hero.y;if(Math.hypot(vx,vy)<58){d.hit.add(e);const dmg=(progress.atk||8)*1.08+9+lv*4+Math.random()*6;arpgDamageEnemy(e,dmg*(progress.nineTailGear?4.5:1),'ice');e.slow=1.2+.18*lv;}}
     if(d.time>=d.total){
       const endX=arpg.hero.x,endY=arpg.hero.y-8;
       arpg.fx.push({type:'iceDashLine',x1:d.startX,y1:d.startY,x2:endX,y2:endY,age:0,life:.38,lanes:progress.nineTailGear?3:1});
@@ -7339,7 +7354,7 @@ function arpgDrawBattle(){
   rect(18,42,330,70,'rgba(8,22,45,.82)');text(`${heroName}  HP ${Math.ceil(battle.heroHP)}/${progress.maxHP}`,32,65,17,'left','#fff',900);text(`MP ${Math.ceil(battle.heroMP)}/${progress.maxMP}`,32,91,15,'left','#bfe7ff',800);
   rect(180,57,150,11,'rgba(255,255,255,.18)');rect(180,57,150*Math.max(0,battle.heroHP/progress.maxHP),11,'#73d58a');rect(180,83,150,8,'rgba(255,255,255,.18)');rect(180,83,150*Math.max(0,battle.heroMP/progress.maxMP),8,'#76bce8');
   text('WASD / スティック：移動　J:短剣 K:氷結斬り L長押し:氷弾 H:回復',480,24,12,'center','#243852',700);
-  if(arpg.charging){const rate=Math.min(1,arpg.charge/1.15);rect(350,48,260,18,'rgba(20,40,65,.7)');rect(353,51,254*rate,12,'#bcefff');const maxName=progress.hiddenSkills?.hero?'デスブリザード':(progress.heroPebbleAll||1)>=2?'氷晶大波':'氷晶波';text(rate>=1?`MAX：${maxName}！`:'氷弾チャージ中',480,80,13,'center','#23425c',900);}
+  if(arpg.charging){const rate=Math.min(1,arpg.charge/arpgIceWaveChargeTime());rect(350,48,260,18,'rgba(20,40,65,.7)');rect(353,51,254*rate,12,'#bcefff');const maxName=progress.hiddenSkills?.hero?'デスブリザード':(progress.heroPebbleAll||1)>=2?'氷晶大波':'氷晶波';text(rate>=1?`MAX：${maxName}！`:'氷弾チャージ中',480,80,13,'center','#23425c',900);}
   if(arpg.messageT>0)text(arpg.message,480,112,17,'center','#17334b',900);
   drawDamagePopups();
 }
