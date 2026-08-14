@@ -2512,7 +2512,7 @@ function drawBattle(){
 
         outlineRect(760,378,160,52,(progress.heroManaSkill||0)?'#d9f4ff':'#626d78',(progress.heroManaSkill||0)?'#62afd1':'#8d969e',2);
         const manaCost=heroSkillMPCost(6);
-        text((progress.heroManaSkill||0)?`水脈の雫 (${manaCost})`:'水脈の雫（未習得）',840,404,(progress.heroManaSkill||0)?18:14,'center',(progress.heroManaSkill||0)?'#102b40':'#ffffff',900);
+        text((progress.heroManaSkill||0)?'水脈吸収（パッシブ）':'MPパッシブ（未習得）',840,404,(progress.heroManaSkill||0)?15:14,'center',(progress.heroManaSkill||0)?'#102b40':'#ffffff',900);
         if(yunoJoined && progress.heroYunoComboUnlocked && battle.monsterId>=400){
           outlineRect(40,438,250,44,'#d8f2ed','#59aaa6',2);text('合体：蒼風大癒 (24)',165,460,20,'center','#174c4b');
           outlineRect(305,438,300,44,'#d8eef7','#5d9fbd',2);text('合体：氷嵐大旋風 (24)',455,460,20,'center','#173f57');
@@ -4436,7 +4436,7 @@ function drawMenu(){
       });
 
       const hh=progress.heroHealSkill||1, hm=progress.heroManaSkill||0;
-      text('回復・魔力ルート',690,239,15,'left','#bfe7f6',800);
+      text('回復・MP循環ルート',690,239,15,'left','#bfe7f6',800);
       outlineRect(690,252,225,92,'#e7f5fb','#78b9d7',2);
       const healName=hh>=4?'九尾大水癒':hh>=3?'大水癒':hh>=2?'水の大いやし':'水のいやし';
       text(healName,705,278,18,'left','#17324a',800);
@@ -4444,9 +4444,9 @@ function drawMenu(){
       text(hh>=4?'Lv.4 最大':hh===3?'次 Lv.4　SP25（即強化可）':hh===2?'次 Lv.3　SP3':'次 Lv.2　SP2',900,329,11,'right','#3d6f8a',800);
 
       outlineRect(690,360,225,92,hm?'#c8e2ed':'#e7f5fb',hm?'#6aaacb':'#78b9d7',2);
-      text(hm>=2?'水脈の恵み':'水脈の雫',705,386,18,'left','#17324a',800);
-      text(hm>=2?'味方1人 MP32回復 / MP6':'味方1人 MP18回復 / MP6',705,410,12,'left','#3d5d73');
-      text(hm>=2?'Lv.2 最大':hm===1?'次 Lv.2　SP3':'必要 SP2',900,438,11,'right',hm?'#356b7b':'#3d6f8a',800);
+      text('水脈吸収（パッシブ）',705,386,17,'left','#17324a',800);
+      text(hm>=2?'短剣命中時 MP+2':hm===1?'短剣命中時 MP+1':'短剣攻撃でMPを吸収',705,410,12,'left','#3d5d73');
+      text(hm>=2?'Lv.2 最大':hm===1?'次 Lv.2　SP3':'習得 SP2',900,438,11,'right',hm?'#356b7b':'#3d6f8a',800);
 
       const mf=progress.heroMagicFlow||0;
       outlineRect(690,460,225,62,mf?'#d8eef7':'#26394b',mf?'#6aaacb':'#668398',2);
@@ -4578,11 +4578,11 @@ function menuTap(x,y){
   if(menuPage==='skill' && menuCharacter==='hero'){
     if(x>=690&&x<=915&&y>=360&&y<=452){
       const ml=progress.heroManaSkill||0;
-      if(ml>=2){flashText='水脈の雫は最大強化です';flashTimer=1.4;return;}
+      if(ml>=2){flashText='水脈吸収は最大強化です';flashTimer=1.4;return;}
       const cost=ml===0?2:3;
       if(progress.sp<cost){flashText=`SPが足りない（必要 ${cost}）`;flashTimer=1.5;return;}
       progress.sp-=cost;progress.heroManaSkill=ml+1;saveProgress();saveGame();
-      flashText=ml===0?'「水脈の雫」を習得！':'「水脈の恵み」に強化！';flashTimer=1.8;return;
+      flashText=ml===0?'パッシブ「水脈吸収」を習得！':'「水脈吸収」をLv.2に強化！';flashTimer=1.8;return;
     }
     if(x>=690&&x<=915&&y>=252&&y<=344){
       const lv=progress.heroHealSkill||1;
@@ -6605,7 +6605,7 @@ canvas.addEventListener('pointerdown',e=>{
             else if(x<395)battleAttack('ice');
             else if(x<575)battleAttack('iceSlash');
             else if(x<755)battleAttack('iceWave');
-            else {if(progress.heroManaSkill||0){openPartyTarget('hero','manaHeal','水脈の雫');return;} battleMessage='水脈の雫は未習得！';return;}
+            else {battleMessage='MP回復は「水脈吸収」のパッシブ効果になりました。';return;}
           }else if(yunoJoined && progress.heroYunoComboUnlocked && battle.monsterId>=400 && y>=435&&y<=485){
             if(x<300)heroYunoCombo('grandHeal');
             else if(x<615)heroYunoCombo('grandDamage');
@@ -6754,7 +6754,7 @@ function arpgInit(){
       yuno:{x:150,y:245,cd:{bow:0,windArea:0,heal:0,mpHeal:0},think:.7},
       gyou:{x:210,y:235,cd:{spear:0,shield:0},think:.4,shield:0}
     },
-    cd:{attack:0,a:0,b:0,c:0},charge:0,charging:false,projectiles:[],fx:[],winTimer:0,loseTimer:0,message:'リアルタイム戦闘！',messageT:2.2
+    cd:{attack:0,a:0,b:0,c:0},charge:0,charging:false,projectiles:[],fx:[],winTimer:0,loseTimer:0,message:'リアルタイム戦闘！',messageT:2.2,mpRegenAcc:0
   };
   battle.heroHP=Math.min(battle.heroHP??progress.maxHP,progress.maxHP);
   battle.heroMP=Math.min(battle.heroMP??progress.maxMP,progress.maxMP);
@@ -6789,7 +6789,20 @@ function arpgSpendMP(cost){if((battle.heroMP||0)<cost){arpg.message='MPが足り
 function arpgUseAttack(){
   if(scene!=='battle'||!battle)return;if(!arpg)arpgInit();if(arpg.cd.attack>0||arpg.winTimer||arpg.loseTimer)return;
   const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y,92);
-  if(e){arpg.hero.face=e.x>=arpg.hero.x?1:-1;const dmg=(progress.atk||8)*.75+4+arpgRank('hero','attack')*2+Math.random()*4;arpgDamageEnemy(e,dmg);}
+  if(e){
+    arpg.hero.face=e.x>=arpg.hero.x?1:-1;
+    const dmg=(progress.atk||8)*.75+4+arpgRank('hero','attack')*2+Math.random()*4;
+    arpgDamageEnemy(e,dmg);
+    // 「水脈吸収」：短剣で実際にダメージを与えた時だけ主人公MPを回復するパッシブ。
+    const drainLv=progress.heroManaSkill||0;
+    if(drainLv>0 && battle.heroMP<progress.maxMP){
+      const gain=drainLv>=2?2:1;
+      const before=battle.heroMP;
+      battle.heroMP=Math.min(progress.maxMP,battle.heroMP+gain);
+      const got=battle.heroMP-before;
+      if(got>0)addDamagePopup(`MP+${got}`,arpg.hero.x,arpg.hero.y-56,'#8ed9ff');
+    }
+  }
   // Short dagger sweep: a fast semicircle around the hero with lingering afterimages.
   arpg.fx.push({type:'daggerArc',x:arpg.hero.x,y:arpg.hero.y-8,face:arpg.hero.face,age:0,life:.22});
   sfx('slash');
@@ -6804,14 +6817,29 @@ function arpgInputDir8(){
   const ang=Math.atan2(dy,dx),snap=Math.round(ang/(Math.PI/4))*(Math.PI/4);
   return {x:Math.cos(snap),y:Math.sin(snap)};
 }
+function arpgDashTargetSegment(d){
+  // 各段ごとに現在位置から最寄りの敵を再検索。多段でも毎回「近い敵」を斬りに行く。
+  const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y,280);
+  let dx=arpg.hero.face||1,dy=0,dist=d.baseDist;
+  if(e){
+    dx=e.x-arpg.hero.x;dy=e.y-arpg.hero.y;
+    const len=Math.max(1,Math.hypot(dx,dy));
+    dx/=len;dy/=len;
+    // 敵を少し通り抜ける距離まで高速移動し、確実に斬撃判定を通す。
+    dist=Math.max(68,Math.min(285,len+24));
+    d.target=e;
+  }else{
+    const input=arpgInputDir8();dx=input.x;dy=input.y;d.target=null;
+  }
+  d.dx=dx;d.dy=dy;d.dist=dist;d.time=0;d.hit=new Set();d.startX=arpg.hero.x;d.startY=arpg.hero.y-8;
+  if(Math.abs(dx)>.1)arpg.hero.face=dx>0?1:-1;
+}
 function arpgUseA(){
   if(!arpg||arpg.cd.a>0||arpg.winTimer||arpg.loseTimer||arpg.hero.dash)return;const cost=6;if(!arpgSpendMP(cost))return;
-  const lv=arpgIceSlashRank(),count=arpgIceSlashCount(),dir=arpgInputDir8();
-  if(Math.abs(dir.x)>.1)arpg.hero.face=dir.x>0?1:-1;
-  // 強化ごとに実際の高速移動回数を増やす。通常は1→2→3回で終了。
-  // 九尾の力は現在回数を3倍するため、3→6→9回。回数が多いほど1区間を短くして暴走を防ぐ。
-  const dist=count===1?124:count===2?94:count===3?80:count===6?55:43;
-  arpg.hero.dash={dx:dir.x,dy:dir.y,segment:0,segments:count,time:0,total:.105,dist,hit:new Set(),startX:arpg.hero.x,startY:arpg.hero.y-8};
+  const lv=arpgIceSlashRank(),count=arpgIceSlashCount();
+  const baseDist=count===1?124:count===2?108:count===3?96:count===6?82:72;
+  arpg.hero.dash={dx:arpg.hero.face||1,dy:0,segment:0,segments:count,time:0,total:.105,dist:baseDist,baseDist,hit:new Set(),target:null,startX:arpg.hero.x,startY:arpg.hero.y-8};
+  arpgDashTargetSegment(arpg.hero.dash);
   arpg.message=progress.nineTailGear?`九尾・氷結斬り ×${count}`:count>1?`氷結斬り ×${count}`:'氷結斬り！';arpg.messageT=.8;
   arpg.cd.a=Math.max(1.5,3.0-lv*.16);sfx('ice');
 }
@@ -6909,7 +6937,7 @@ function arpgUpdateAlly(who,dt){
 function arpgEnemyHitHero(e,base){
   const g=arpg.allies.gyou,guarding=arpgPartyEnabled('gyou')&&g.shield>0&&Math.hypot(g.x-arpg.hero.x,g.y-arpg.hero.y)<105;
   if(guarding){addDamagePopup('BLOCK',g.x,g.y-38,'#ffe69b');sfx('guard');g.shield=Math.max(0,g.shield-.42);return;}
-  if(arpg.hero.inv>0)return;const dmg=Math.max(1,Math.round(base-Math.floor((progress.def||0)*.18)));battle.heroHP=Math.max(0,battle.heroHP-dmg);arpg.hero.inv=.45;addDamagePopup(`-${dmg}`,arpg.hero.x,arpg.hero.y-42,'#ff8278');sfx('hit');
+  if(arpg.hero.dash||arpg.hero.inv>0)return;const dmg=Math.max(1,Math.round(base-Math.floor((progress.def||0)*.18)));battle.heroHP=Math.max(0,battle.heroHP-dmg);arpg.hero.inv=.45;addDamagePopup(`-${dmg}`,arpg.hero.x,arpg.hero.y-42,'#ff8278');sfx('hit');
 }
 function arpgUpdateEnemy(e,dt){
   if(e.src.hp<=0)return;e.flash=Math.max(0,e.flash-dt);e.slow=Math.max(0,e.slow-dt);e.attackCd-=dt;e.think-=dt;
@@ -6940,7 +6968,7 @@ function arpgUpdate(dt){
       d.segment++;
       if(d.segment>=d.segments){arpg.hero.dash=null;}
       else{
-        d.time=0;d.hit=new Set();d.startX=endX;d.startY=endY;
+        arpgDashTargetSegment(d);
         // 各区間を明確な一閃として見せるため、区切りごとに氷SEを軽く重ねる。
         if(d.segment%2===0)sfx('ice');
       }
