@@ -1837,7 +1837,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.7',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.9',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態からスタート',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -6661,7 +6661,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1.7
+// ARPG PROTOTYPE Ver.0.1.9
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
@@ -6748,7 +6748,7 @@ function arpgInit(){
   const spots=[[690,210],[800,240],[650,325],[785,350],[860,300]];
   arpg={
     battleRef:battle,hero:{x:250,y:310,face:1,inv:0,dash:null},
-    enemies:src.map((e,i)=>({src:e,x:(spots[i]||[700+i*28,220+i*35])[0],y:(spots[i]||[700+i*28,220+i*35])[1],vx:0,vy:0,attackCd:.5+Math.random(),think:.2+Math.random()*.6,flash:0,slow:0})),
+    enemies:src.map((e,i)=>({src:e,x:(spots[i]||[700+i*28,220+i*35])[0],y:(spots[i]||[700+i*28,220+i*35])[1],vx:0,vy:0,attackCd:.5+Math.random(),think:.2+Math.random()*.6,flash:0,slow:0,root:0})),
     allies:{
       suzu:{x:185,y:365,cd:{sword:0,fireSlash:0,fireArea:0},think:.5},
       yuno:{x:150,y:245,cd:{bow:0,windArea:0,heal:0,mpHeal:0},think:.7},
@@ -6852,11 +6852,16 @@ function arpgReleaseB(){
   const dx=e?e.x-arpg.hero.x:arpg.hero.face,dy=e?e.y-arpg.hero.y:0,baseAng=Math.atan2(dy,dx);
   if(Math.abs(dx)>.1)arpg.hero.face=dx>0?1:-1;
   if(maxed){
-    // 最大チャージは多重氷弾ではなく「氷晶波」。前方へ大きな氷の波を放つ。
+    // 最大チャージは主人公を中心に広がる円形の氷波。
+    // 氷晶大波で半径が拡大し、デスブリザード習得後は画面全域まで届く。
     const waveLv=Math.max(1,progress.heroPebbleAll||1);
-    const speed=330;
-    arpg.projectiles.push({x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(baseAng)*speed,vy:Math.sin(baseAng)*speed,r:waveLv>=2?78:62,life:1.15,dmg:(progress.atk||8)*1.65+22+lv*5+(waveLv-1)*12,area:true,wave:true});
-    arpg.message=waveLv>=2?'氷晶大波！':'氷晶波！';arpg.messageT=1.0;
+    const death=!!progress.hiddenSkills?.hero;
+    const maxR=death?Math.hypot(W,H)+140:(waveLv>=2?330:235);
+    const life=death?.82:(waveLv>=2?.68:.58);
+    const root=death?3.0:(waveLv>=2?2.1:1.45);
+    const dmg=(progress.atk||8)*(death?2.35:waveLv>=2?1.95:1.65)+22+lv*5+(waveLv-1)*12+(death?34:0);
+    arpg.fx.push({type:'iceWave',x:arpg.hero.x,y:arpg.hero.y-8,age:0,life,maxR,dmg,root,hit:new Set(),death});
+    arpg.message=death?'デスブリザード！':waveLv>=2?'氷晶大波！':'氷晶波！';arpg.messageT=1.15;
   }else{
     const shotCount=lv<=1?1:lv===2?3:lv===3?5:7;
     // 狭い前方コーン内へランダム発射。等間隔の綺麗な扇形にはしない。
@@ -6940,9 +6945,9 @@ function arpgEnemyHitHero(e,base){
   if(arpg.hero.dash||arpg.hero.inv>0)return;const dmg=Math.max(1,Math.round(base-Math.floor((progress.def||0)*.18)));battle.heroHP=Math.max(0,battle.heroHP-dmg);arpg.hero.inv=.45;addDamagePopup(`-${dmg}`,arpg.hero.x,arpg.hero.y-42,'#ff8278');sfx('hit');
 }
 function arpgUpdateEnemy(e,dt){
-  if(e.src.hp<=0)return;e.flash=Math.max(0,e.flash-dt);e.slow=Math.max(0,e.slow-dt);e.attackCd-=dt;e.think-=dt;
+  if(e.src.hp<=0)return;e.flash=Math.max(0,e.flash-dt);e.slow=Math.max(0,e.slow-dt);e.root=Math.max(0,(e.root||0)-dt);e.attackCd-=dt;e.think-=dt;
   const dx=arpg.hero.x-e.x,dy=arpg.hero.y-e.y,d=Math.max(1,Math.hypot(dx,dy)),spd=(e.slow>0?42:72)+(battle.monsterId>=900?12:0);
-  if(d>66){e.x+=dx/d*spd*dt;e.y+=dy/d*spd*dt;}else if(e.attackCd<=0){const scale=Math.max(1,(progress.level||1)*.16);arpgEnemyHitHero(e,5+scale+Math.random()*5+(battle.monsterId>=900?7:0));e.attackCd=.9+Math.random()*.8;}
+  if(d>66){if(e.root<=0){e.x+=dx/d*spd*dt;e.y+=dy/d*spd*dt;}}else if(e.attackCd<=0){const scale=Math.max(1,(progress.level||1)*.16);arpgEnemyHitHero(e,5+scale+Math.random()*5+(battle.monsterId>=900?7:0));e.attackCd=.9+Math.random()*.8;}
 }
 function arpgUpdate(dt){
   if(!battle){arpgCleanup();return;}if(!arpg||arpg.battleRef!==battle)arpgInit();if(!arpg)return;
@@ -6978,7 +6983,19 @@ function arpgUpdate(dt){
   }
   arpg.hero.x=Math.max(55,Math.min(905,arpg.hero.x));arpg.hero.y=Math.max(120,Math.min(455,arpg.hero.y));
   arpgUpdateAlly('suzu',dt);arpgUpdateAlly('yuno',dt);arpgUpdateAlly('gyou',dt);arpg.enemies.forEach(e=>arpgUpdateEnemy(e,dt));
-  for(const f of arpg.fx)f.age+=dt;
+  for(const f of arpg.fx){
+    f.age+=dt;
+    if(f.type==='iceWave'){
+      const rate=Math.min(1,f.age/f.life),r=f.maxR*rate;
+      for(const e of arpg.enemies){
+        if(e.src.hp<=0||f.hit.has(e))continue;
+        if(Math.hypot(e.x-f.x,e.y-f.y)<=r+22){
+          f.hit.add(e);arpgDamageEnemy(e,f.dmg,'ice');e.slow=Math.max(e.slow||0,f.root+.5);e.root=Math.max(e.root||0,f.root);
+          addDamagePopup('足止め',e.x,e.y-54,'#c9f4ff');
+        }
+      }
+    }
+  }
   arpg.fx=arpg.fx.filter(f=>f.age<f.life);
   for(const p of arpg.projectiles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;for(const e of arpg.enemies){if(e.src.hp<=0||p.hit===e)continue;if(Math.hypot(p.x-e.x,p.y-e.y)<p.r+24){if(p.area){for(const q of arpg.enemies)if(q.src.hp>0&&Math.hypot(p.x-q.x,p.y-q.y)<p.r+60){arpgDamageEnemy(q,p.dmg,'ice');q.slow=1.8;}p.life=0;}else{arpgDamageEnemy(e,p.dmg,'ice');e.slow=1.4;p.life=0;}break;}}}
   arpg.projectiles=arpg.projectiles.filter(p=>p.life>0&&p.x>-80&&p.x<W+80&&p.y>-80&&p.y<H+80);
@@ -7024,19 +7041,28 @@ function arpgDrawDaggerArc(f){
   ctx.restore();
 }
 
+function arpgDrawIceWave(f){
+  const t=Math.min(1,f.age/f.life),r=f.maxR*t,alpha=Math.max(0,1-t);
+  ctx.save();
+  ctx.globalAlpha=.24*alpha;ctx.fillStyle=f.death?'#d8f7ff':'#c9f3ff';ctx.beginPath();ctx.arc(f.x,f.y,r,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=.9*alpha;ctx.strokeStyle='#e8fbff';ctx.lineWidth=f.death?13:8;ctx.beginPath();ctx.arc(f.x,f.y,r,0,Math.PI*2);ctx.stroke();
+  ctx.globalAlpha=.55*alpha;ctx.strokeStyle='#78c9ee';ctx.lineWidth=4;ctx.beginPath();ctx.arc(f.x,f.y,Math.max(0,r-16),0,Math.PI*2);ctx.stroke();
+  ctx.restore();
+}
+
 function arpgDrawBattle(){
   if(!battle)return;if(!arpg)arpgInit();const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#9cd8ef');g.addColorStop(1,'#b7d88d');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);rect(0,390,W,150,'#8eb96f');
   for(let x=40;x<W;x+=110)ellipse(x,420+(x%3)*18,45,10,'rgba(70,110,60,.16)');
   arpg.enemies.forEach(arpgDrawEnemy);
   if(arpgPartyEnabled('suzu'))drawSuzumaru(arpg.allies.suzu.x,arpg.allies.suzu.y,.82);if(arpgPartyEnabled('yuno'))drawYuno(arpg.allies.yuno.x,arpg.allies.yuno.y,.80);if(arpgPartyEnabled('gyou')){drawGyou(arpg.allies.gyou.x,arpg.allies.gyou.y,.80);if(arpg.allies.gyou.shield>0){ctx.strokeStyle='rgba(255,231,150,.8)';ctx.lineWidth=5;ctx.beginPath();ctx.arc(arpg.allies.gyou.x,arpg.allies.gyou.y-10,34,-1.2,1.2);ctx.stroke();}}
   ctx.save();if(arpg.hero.inv>0&&Math.floor(arpg.hero.inv*20)%2)ctx.globalAlpha=.45;drawHeroFox(arpg.hero.x,arpg.hero.y,.95);ctx.restore();
-  for(const f of arpg.fx){if(f.type==='daggerArc')arpgDrawDaggerArc(f);else if(f.type==='iceDashLine')arpgDrawIceDashLine(f);}
+  for(const f of arpg.fx){if(f.type==='daggerArc')arpgDrawDaggerArc(f);else if(f.type==='iceDashLine')arpgDrawIceDashLine(f);else if(f.type==='iceWave')arpgDrawIceWave(f);}
   for(const p of arpg.projectiles){ctx.fillStyle='rgba(190,240,255,.85)';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#e8fbff';ctx.lineWidth=3;ctx.stroke();}
   // HUD
   rect(18,16,330,70,'rgba(8,22,45,.82)');text(`${heroName}  HP ${Math.ceil(battle.heroHP)}/${progress.maxHP}`,32,39,17,'left','#fff',900);text(`MP ${Math.ceil(battle.heroMP)}/${progress.maxMP}`,32,65,15,'left','#bfe7ff',800);
   rect(180,31,150,11,'rgba(255,255,255,.18)');rect(180,31,150*Math.max(0,battle.heroHP/progress.maxHP),11,'#73d58a');rect(180,57,150,8,'rgba(255,255,255,.18)');rect(180,57,150*Math.max(0,battle.heroMP/progress.maxMP),8,'#76bce8');
   text('WASD / スティック：移動　J:短剣 K:氷結斬り L長押し:氷弾 H:回復',480,24,12,'center','#243852',700);
-  if(arpg.charging){const rate=Math.min(1,arpg.charge/1.15);rect(350,48,260,18,'rgba(20,40,65,.7)');rect(353,51,254*rate,12,'#bcefff');text(rate>=1?'MAX：氷晶波！':'氷弾チャージ中',480,80,13,'center','#23425c',900);}
+  if(arpg.charging){const rate=Math.min(1,arpg.charge/1.15);rect(350,48,260,18,'rgba(20,40,65,.7)');rect(353,51,254*rate,12,'#bcefff');const maxName=progress.hiddenSkills?.hero?'デスブリザード':(progress.heroPebbleAll||1)>=2?'氷晶大波':'氷晶波';text(rate>=1?`MAX：${maxName}！`:'氷弾チャージ中',480,80,13,'center','#23425c',900);}
   if(arpg.messageT>0)text(arpg.message,480,112,17,'center','#17334b',900);
   drawDamagePopups();
 }
