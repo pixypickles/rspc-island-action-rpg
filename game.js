@@ -833,21 +833,7 @@ const finalWeaponDialog=[
 ];
 
 const yunoComboDialog=[
-  ['narrator','爆炎大剣を受け取ったあと、ユーノがぴくるすを呼び止めた。'],
-  ['yuno','ぴくるす、ちょっと試したいことがあるんだけど。'],
-  ['hero','試したいこと？'],
-  ['yuno','ぴくるすは水と氷を使える。私は風を使える。'],
-  ['yuno','雨と風が合わさると、台風になりますね。'],
-  ['dash','急に授業みたいになった。'],
-  ['yuno','つまり、別々に魔法を撃つより、二人で一つの流れを作ったほうが大きな力になるかもしれない。'],
-  ['hero','攻撃だけじゃなくて、回復にも？'],
-  ['yuno','うん。水の回復魔法を風で広げれば、全員を一気に癒せるはず。'],
-  ['narrator','二人は魔力のタイミングを合わせる練習を始めた。'],
-  ['yuno','今。風を送る！'],
-  ['hero','――いくよ！'],
-  ['narrator','水と風が渦を作り、広場いっぱいに涼しい霧が広がった。'],
-  ['yuno','できた。これなら実戦でも使える。'],
-  ['narrator','合体技「蒼風大癒」と「氷嵐大旋風」が使用可能になった！']
+  ['narrator','']
 ];
 
 const volcanoBearQuestDialog=[
@@ -1856,7 +1842,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.20',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.21',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態へリセット',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -6069,15 +6055,15 @@ function pressAction(){
   if(scene==='finalWeapon'){
     dialogIndex++;
     if(dialogIndex>=finalWeaponDialog.length){
-      progress.finalFlameBlade=true;saveProgress();scene='yunoCombo';dialogIndex=0;saveGame();
+      progress.finalFlameBlade=true;
+      // ARPG版では合体技を使わないため、雨＋風＝台風の合体技イベントは挟まない。
+      progress.heroYunoComboUnlocked=false;saveProgress();scene='volcanoBearQuest';dialogIndex=0;saveGame();
     }
     return;
   }
   if(scene==='yunoCombo'){
-    dialogIndex++;
-    if(dialogIndex>=yunoComboDialog.length){
-      progress.heroYunoComboUnlocked=true;saveProgress();scene='volcanoBearQuest';dialogIndex=0;saveGame();
-    }
+    // 旧セーブ互換：この場面に保存されていた場合も合体技会話を飛ばして先へ進める。
+    progress.heroYunoComboUnlocked=false;saveProgress();scene='volcanoBearQuest';dialogIndex=0;saveGame();
     return;
   }
   if(scene==='volcanoBearQuest'){
@@ -6673,7 +6659,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1.20
+// ARPG PROTOTYPE Ver.0.1.21
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
@@ -6995,11 +6981,11 @@ function arpgAllyTry(who,action){
     arpg.fx.push({type:'suzuFireArc',x:a.x,y:a.y-10,face:a.face,age:0,life:.34,r:68});
     a.cd.fireSlash=Math.max(2.4,4.6-lv*.2);return true;
   }
-  if(who==='suzu'&&action==='ultimate'&&a.cd.ultimate<=0&&progress.hiddenSkills?.suzu&&e){
+  if(who==='suzu'&&action==='ultimate'&&a.cd.ultimate<=0&&progress.hiddenSkills?.suzu&&e&&Math.hypot(e.x-a.x,e.y-a.y)<=245){
     const ss=suzumaruStats();
     const fm=1+(progress.suzuSkills?.fightingFlame||0)*.06;
     const live=arpg.enemies.filter(x=>x.src.hp>0);
-    // 紅蓮爆砕：CTが明けたら即発動。中心爆発＋三連炎撃で奥義らしい火力と見た目にする。
+    // 紅蓮爆砕：CTが明けても空振りせず、敵が有効距離まで来た時だけ即発動する。
     for(let wave=0;wave<3;wave++){
       const mult=[1.08,.92,.78][wave];
       for(const x of live) arpgDamageEnemy(x,(ss.atk*1.45+40+(progress.level||1)*2.2)*fm*mult,'fire');
