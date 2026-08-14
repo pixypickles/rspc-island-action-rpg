@@ -1856,7 +1856,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.18',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.19',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態へリセット',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -6725,8 +6725,8 @@ function arpgIceSlashRank(){
   return Math.min(3,Math.max(arpgLv,treeLv));
 }
 function arpgIceSlashCount(){
-  const base=arpgIceSlashRank();
-  return base*(progress.nineTailGear?3:1);
+  // 九尾時も実際の高速移動は最大3回まで。3本の残像線それぞれを1撃分として扱う。
+  return arpgIceSlashRank();
 }
 function arpgIceShotRank(){
   // 旧スキルツリーの「氷つぶて乱射II/III/IV」もARPG氷弾の強化として扱う。
@@ -6927,10 +6927,11 @@ function arpgDashTargetSegment(d){
 function arpgUseA(){
   if(!arpg||arpg.cd.a>0||arpg.winTimer||arpg.loseTimer||arpg.hero.dash)return;const cost=6;if(!arpgSpendMP(cost))return;
   const lv=arpgIceSlashRank(),count=arpgIceSlashCount();
-  const baseDist=count===1?124:count===2?108:count===3?96:count===6?82:72;
+  const baseDist=count===1?124:count===2?108:96;
   arpg.hero.dash={dx:arpg.hero.face||1,dy:0,prevDx:null,prevDy:null,segment:0,segments:count,time:0,total:.105,dist:baseDist,baseDist,hit:new Set(),target:null,startX:arpg.hero.x,startY:arpg.hero.y-8};
   arpgDashTargetSegment(arpg.hero.dash);
-  arpg.message=progress.nineTailGear?`九尾・氷結斬り ×${count}`:count>1?`氷結斬り ×${count}`:'氷結斬り！';arpg.messageT=.8;
+  const equiv=count*(progress.nineTailGear?3:1);
+  arpg.message=progress.nineTailGear?`九尾・氷結斬り ${count}閃／${equiv}撃`:(count>1?`氷結斬り ×${count}`:'氷結斬り！');arpg.messageT=.8;
   arpg.cd.a=Math.max(1.5,3.0-lv*.16);sfx('ice');
 }
 function arpgBeginB(){if(!arpg||arpg.cd.b>0||arpg.winTimer||arpg.loseTimer)return;arpg.charging=true;arpg.charge=0;}
@@ -6953,15 +6954,20 @@ function arpgReleaseB(){
     arpg.fx.push({type:'iceWave',x:arpg.hero.x,y:arpg.hero.y-8,age:0,life,maxR,dmg,root,hit:new Set(),death});
     arpg.message=death?'デスブリザード！':waveLv>=2?'氷晶大波！':'氷晶波！';arpg.messageT=1.15;
   }else{
-    const shotCount=lv<=1?1:lv===2?3:lv===3?5:7;
-    // 狭い前方コーン内へランダム発射。等間隔の綺麗な扇形にはしない。
-    const halfCone=0.18; // 約±10度
+    const baseShots=lv<=1?1:lv===2?3:lv===3?5:7;
+    const shotCount=baseShots+(progress.nineTailGear?2:0);
+    // 狭い前方コーン内にランダム発射。ただし密集しすぎないよう最低限の角度差を取る。
+    const halfCone=0.24; // 約±14度
+    const offsets=[];
     for(let i=0;i<shotCount;i++){
-      let offset=shotCount===1?0:(Math.random()*2-1)*halfCone;
-      // 全弾が同じ方向へ固まりすぎない程度の軽い散らし。
-      if(shotCount>1)offset+=(i-(shotCount-1)/2)*0.008;
-      const a=baseAng+offset,speed=430+Math.random()*35;
-      arpg.projectiles.push({x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:16,life:1.8,dmg:(progress.atk||8)*(.8+(Math.min(c,1.2)*.6))+8+lv*4,area:false});
+      let off=shotCount===1?0:(Math.random()*2-1)*halfCone;
+      for(let tries=0;tries<10&&offsets.some(v=>Math.abs(v-off)<0.035);tries++)off=(Math.random()*2-1)*halfCone;
+      offsets.push(off);
+    }
+    offsets.sort((a,b)=>a-b);
+    for(const offset of offsets){
+      const a=baseAng+offset,speed=440+Math.random()*45;
+      arpg.projectiles.push({type:'iceCrystal',x:arpg.hero.x,y:arpg.hero.y-8,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:9,life:1.8,dmg:(progress.atk||8)*(.8+(Math.min(c,1.2)*.6))+8+lv*4,area:false});
     }
     arpg.message=`氷弾 ×${shotCount}`;arpg.messageT=.9;
   }
@@ -7136,7 +7142,7 @@ function arpgUpdate(dt){
     const d=arpg.hero.dash,step=d.dist/d.total*dt;
     arpg.hero.x+=d.dx*step;arpg.hero.y+=d.dy*step;d.time+=dt;
     const lv=arpgIceSlashRank();
-    for(const e of arpg.enemies){if(e.src.hp<=0||d.hit.has(e))continue;const vx=e.x-arpg.hero.x,vy=e.y-arpg.hero.y;if(Math.hypot(vx,vy)<58){d.hit.add(e);const dmg=(progress.atk||8)*1.08+9+lv*4+Math.random()*6;arpgDamageEnemy(e,dmg,'ice');e.slow=1.2+.18*lv;}}
+    for(const e of arpg.enemies){if(e.src.hp<=0||d.hit.has(e))continue;const vx=e.x-arpg.hero.x,vy=e.y-arpg.hero.y;if(Math.hypot(vx,vy)<58){d.hit.add(e);const dmg=(progress.atk||8)*1.08+9+lv*4+Math.random()*6;arpgDamageEnemy(e,dmg*(progress.nineTailGear?3:1),'ice');e.slow=1.2+.18*lv;}}
     if(d.time>=d.total){
       const endX=arpg.hero.x,endY=arpg.hero.y-8;
       arpg.fx.push({type:'iceDashLine',x1:d.startX,y1:d.startY,x2:endX,y2:endY,age:0,life:.38,lanes:progress.nineTailGear?3:1});
@@ -7302,7 +7308,7 @@ function arpgDrawBattle(){
   if(arpgPartyEnabled('suzu'))drawSuzumaru(arpg.allies.suzu.x,arpg.allies.suzu.y,.82);if(arpgPartyEnabled('yuno'))drawYuno(arpg.allies.yuno.x,arpg.allies.yuno.y,.80);if(arpgPartyEnabled('gyou')){drawGyou(arpg.allies.gyou.x,arpg.allies.gyou.y,.80);if(arpg.allies.gyou.shield>0){ctx.strokeStyle='rgba(255,231,150,.8)';ctx.lineWidth=5;ctx.beginPath();ctx.arc(arpg.allies.gyou.x,arpg.allies.gyou.y-10,34,-1.2,1.2);ctx.stroke();}}
   ctx.save();if(arpg.hero.inv>0&&Math.floor(arpg.hero.inv*20)%2)ctx.globalAlpha=.45;drawHeroFox(arpg.hero.x,arpg.hero.y,.95);ctx.restore();
   for(const f of arpg.fx){if(f.type==='daggerArc')arpgDrawDaggerArc(f);else if(f.type==='suzuSwordArc')arpgDrawSuzuArc(f,false);else if(f.type==='suzuFireArc')arpgDrawSuzuArc(f,true);else if(f.type==='iceDashLine')arpgDrawIceDashLine(f);else if(f.type==='iceWave')arpgDrawIceWave(f);else if(f.type==='windWave')arpgDrawWindWave(f);else if(f.type==='spearThrust')arpgDrawSpearThrust(f);else if(f.type==='shieldBash')arpgDrawShieldBash(f);}
-  for(const p of arpg.projectiles){if(p.type==='arrow'){arpgDrawArrow(p);continue;}if(p.type==='enemyArrow'){arpgDrawArrow(p);continue;}if(p.type==='enemyFire'){ctx.save();ctx.shadowBlur=14;ctx.shadowColor='#ff7a2e';ctx.fillStyle='#ff6534';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffd36a';ctx.beginPath();ctx.arc(p.x-3,p.y-3,p.r*.48,0,Math.PI*2);ctx.fill();ctx.restore();continue;}ctx.fillStyle='rgba(190,240,255,.85)';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#e8fbff';ctx.lineWidth=3;ctx.stroke();}
+  for(const p of arpg.projectiles){if(p.type==='arrow'){arpgDrawArrow(p);continue;}if(p.type==='enemyArrow'){arpgDrawArrow(p);continue;}if(p.type==='enemyFire'){ctx.save();ctx.shadowBlur=14;ctx.shadowColor='#ff7a2e';ctx.fillStyle='#ff6534';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffd36a';ctx.beginPath();ctx.arc(p.x-3,p.y-3,p.r*.48,0,Math.PI*2);ctx.fill();ctx.restore();continue;}if(p.type==='iceCrystal'){const ang=Math.atan2(p.vy,p.vx);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(ang);ctx.shadowBlur=9;ctx.shadowColor='rgba(145,225,255,.85)';ctx.fillStyle='rgba(190,240,255,.92)';ctx.strokeStyle='#f1fdff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(14,0);ctx.lineTo(1,-5);ctx.lineTo(-9,0);ctx.lineTo(1,5);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='rgba(238,253,255,.82)';ctx.beginPath();ctx.moveTo(9,0);ctx.lineTo(0,-2.5);ctx.lineTo(-3,0);ctx.lineTo(0,2.5);ctx.closePath();ctx.fill();ctx.restore();continue;}ctx.fillStyle='rgba(190,240,255,.85)';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#e8fbff';ctx.lineWidth=3;ctx.stroke();}
   // HUD
   rect(18,42,330,70,'rgba(8,22,45,.82)');text(`${heroName}  HP ${Math.ceil(battle.heroHP)}/${progress.maxHP}`,32,65,17,'left','#fff',900);text(`MP ${Math.ceil(battle.heroMP)}/${progress.maxMP}`,32,91,15,'left','#bfe7ff',800);
   rect(180,57,150,11,'rgba(255,255,255,.18)');rect(180,57,150*Math.max(0,battle.heroHP/progress.maxHP),11,'#73d58a');rect(180,83,150,8,'rgba(255,255,255,.18)');rect(180,83,150*Math.max(0,battle.heroMP/progress.maxMP),8,'#76bce8');
