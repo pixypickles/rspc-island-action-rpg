@@ -1400,6 +1400,11 @@ function loadGame(){
     if(target==='battle'||target==='shop'||target==='sarubibiShop'||target==='cutscene'||target==='title'){
       target=lastFieldScene||'world';
     }
+    // v0.1.21以前の進行不能救済：村イベント開始済みなのにworldへ戻ったデータは
+    // ダッシュミウ単独状態で再発火できないため、村会話から安全にやり直す。
+    if(target==='world' && villageEventStarted && !suzumaruActive && !suzumaruJoined){
+      target='villageDialog';
+    }
 
     scene=target;
     dialogIndex=0;
@@ -1842,7 +1847,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.21',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.22',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態へリセット',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -2109,7 +2114,11 @@ function startPirateCaptainBattle(){
   battleMessage='海賊船長との最終決戦！';scene='battle';touchUI.classList.add('hidden');saveGame();
 }
 function startBattle(mon){
+  // 戦闘開始地点を必ず記録。ARPG終了後に古いメニュー戻り先へ飛ばないようにする。
+  const battleReturnScene=scene;
+  if(scene!=='battle')saveGame();
   battle={
+    returnScene:battleReturnScene,
     heroHP:progress.maxHP,heroMP:progress.maxMP,
     enemyHP:mon.hp,enemyMaxHP:mon.maxHP,
     enemyName:mon.name,enemyKind:mon.kind,
@@ -3466,7 +3475,8 @@ function finishBattle(){
   const goldGain=mon?({1:8,2:10,3:14}[mon.id]||6):6;
   progress.gold+=goldGain;
   const leveled=gainExp(expGain);saveProgress();
-  scene=menuReturnScene||'road2';touchUI.classList.remove('hidden');
+  const returnScene=(battle&&battle.returnScene)||menuReturnScene||lastFieldScene||'road2';
+  scene=returnScene;touchUI.classList.remove('hidden');
   battle=null;
   flashText=leveled?`レベルアップ！ Lv.${progress.level}　SP+1`:`経験値 ${expGain} / ${goldGain}G 獲得！`;
   flashTimer=3.0;
@@ -5891,6 +5901,7 @@ function pressAction(){
     dialogIndex++;
     if(dialogIndex>=departureDialog.length){
       scene='road2';dialogIndex=0;hero.x=260;hero.y=210;monsters.forEach(m=>{m.alive=true;m.respawn=0;m.x=m.spawnX;m.y=m.spawnY;});touchUI.classList.remove('hidden');
+      lastFieldScene='road2';saveGame();
       flashText='さるびえ村へ向かおう';flashTimer=2.0;
     }
     return;
@@ -6659,7 +6670,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1.21
+// ARPG PROTOTYPE Ver.0.1.22
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
