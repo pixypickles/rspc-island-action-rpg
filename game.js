@@ -1837,7 +1837,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.9',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.10',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態からスタート',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -6661,7 +6661,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1.9
+// ARPG PROTOTYPE Ver.0.1.10
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
@@ -6742,9 +6742,38 @@ function arpgPartyEnabled(who){
   if(who==='gyou') return !!(gyouJoined || gyouJoinConfirmed);
   return true;
 }
+function arpgDifficultyTier(){
+  // さるびえ到着（スズマル同行開始）以降は、物語進行に合わせて敵を段階的に強化する。
+  if(!(suzumaruActive||suzumaruJoined))return 0;
+  if(progress.gameCleared)return 4;
+  if(gyouJoined||gyouJoinConfirmed)return 3;
+  if(yunoJoined)return 2;
+  return 1;
+}
+function arpgApplyEnemyScaling(src){
+  if(!battle||battle._arpgScaled010)return;
+  const tier=arpgDifficultyTier();
+  battle._arpgDifficultyTier=tier;
+  if(tier<=0){battle._arpgScaled010=true;return;}
+  // HPはさるびえ以降25%増から開始し、仲間加入と終盤でさらに上がる。
+  const hpMul=[1,1.25,1.38,1.52,1.68][tier];
+  for(const e of src){
+    const oldMax=Math.max(1,e.maxHP||e.hp||1),ratio=Math.max(0,Math.min(1,(e.hp??oldMax)/oldMax));
+    e.maxHP=Math.max(1,Math.round(oldMax*hpMul));
+    e.hp=Math.max(1,Math.round(e.maxHP*ratio));
+  }
+  if(!battle.enemies&&src[0]){
+    battle.enemyMaxHP=src[0].maxHP;battle.enemyHP=src[0].hp;
+  }else if(battle.enemies&&battle.enemies.length){
+    const live=battle.enemies.find(e=>e.hp>0)||battle.enemies[0];
+    battle.enemyMaxHP=live.maxHP;battle.enemyHP=live.hp;
+  }
+  battle._arpgScaled010=true;
+}
 function arpgInit(){
   if(!battle)return; arpgEnsureProgress();
   const src=arpgEnemySource();
+  arpgApplyEnemyScaling(src);
   const spots=[[690,210],[800,240],[650,325],[785,350],[860,300]];
   arpg={
     battleRef:battle,hero:{x:250,y:310,face:1,inv:0,dash:null},
@@ -6884,8 +6913,20 @@ function arpgUseC(){
 function arpgAllyTry(who,action){
   const a=arpg.allies[who],e=arpgNearestEnemy(a.x,a.y); if(!a||!e&& !['heal','mpHeal','shield'].includes(action))return false;
   const lv=arpgRank(who,action);
-  if(action==='sword'&&a.cd.sword<=0&&Math.hypot(e.x-a.x,e.y-a.y)<120){arpgDamageEnemy(e,8+(progress.level||1)*1.0+lv*3);a.cd.sword=.7;return true;}
-  if(action==='fireSlash'&&a.cd.fireSlash<=0&&Math.hypot(e.x-a.x,e.y-a.y)<150){const fm=1+(progress.suzuSkills?.fightingFlame||0)*.06;arpgDamageEnemy(e,(15+(progress.level||1)*1.25+lv*5)*fm,'fire');a.cd.fireSlash=Math.max(2.4,4.6-lv*.2);return true;}
+  if(action==='sword'&&a.cd.sword<=0&&Math.hypot(e.x-a.x,e.y-a.y)<120){
+    a.face=e.x>=a.x?1:-1;
+    arpgDamageEnemy(e,8+(progress.level||1)*1.0+lv*3);
+    // スズマルの剣は主人公の短剣より大きく、広い半円の残像を描く。
+    arpg.fx.push({type:'suzuSwordArc',x:a.x,y:a.y-10,face:a.face,age:0,life:.28,r:61});
+    a.cd.sword=.7;return true;
+  }
+  if(action==='fireSlash'&&a.cd.fireSlash<=0&&Math.hypot(e.x-a.x,e.y-a.y)<150){
+    a.face=e.x>=a.x?1:-1;
+    const fm=1+(progress.suzuSkills?.fightingFlame||0)*.06;arpgDamageEnemy(e,(15+(progress.level||1)*1.25+lv*5)*fm,'fire');
+    // 火炎斬りは赤～橙の残像を大きく残す。
+    arpg.fx.push({type:'suzuFireArc',x:a.x,y:a.y-10,face:a.face,age:0,life:.34,r:68});
+    a.cd.fireSlash=Math.max(2.4,4.6-lv*.2);return true;
+  }
   if(action==='fireArea'&&a.cd.fireArea<=0){const near=arpg.enemies.filter(x=>x.src.hp>0&&Math.hypot(x.x-a.x,x.y-a.y)<210);if(near.length>=2|| (near.length&&Math.random()<.2)){const fm=1+(progress.suzuSkills?.fightingFlame||0)*.06;near.forEach(x=>arpgDamageEnemy(x,(12+(progress.level||1)+lv*4)*fm,'fire'));a.cd.fireArea=Math.max(4.5,7.8-lv*.25);return true;}}
   if(action==='bow'&&a.cd.bow<=0){arpgDamageEnemy(e,7+(progress.level||1)*.75+lv*2);a.cd.bow=1.05;return true;}
   if(action==='windArea'&&a.cd.windArea<=0){const near=arpg.enemies.filter(x=>x.src.hp>0&&Math.hypot(x.x-a.x,x.y-a.y)<260);if(near.length>=2||Math.random()<.12){near.forEach(x=>arpgDamageEnemy(x,10+(progress.level||1)*.8+lv*3));a.cd.windArea=Math.max(5,8.2-lv*.24);return true;}}
@@ -6946,8 +6987,12 @@ function arpgEnemyHitHero(e,base){
 }
 function arpgUpdateEnemy(e,dt){
   if(e.src.hp<=0)return;e.flash=Math.max(0,e.flash-dt);e.slow=Math.max(0,e.slow-dt);e.root=Math.max(0,(e.root||0)-dt);e.attackCd-=dt;e.think-=dt;
-  const dx=arpg.hero.x-e.x,dy=arpg.hero.y-e.y,d=Math.max(1,Math.hypot(dx,dy)),spd=(e.slow>0?42:72)+(battle.monsterId>=900?12:0);
-  if(d>66){if(e.root<=0){e.x+=dx/d*spd*dt;e.y+=dy/d*spd*dt;}}else if(e.attackCd<=0){const scale=Math.max(1,(progress.level||1)*.16);arpgEnemyHitHero(e,5+scale+Math.random()*5+(battle.monsterId>=900?7:0));e.attackCd=.9+Math.random()*.8;}
+  const dx=arpg.hero.x-e.x,dy=arpg.hero.y-e.y,d=Math.max(1,Math.hypot(dx,dy));
+  const tier=battle._arpgDifficultyTier||0;
+  const speedMul=[1,1.08,1.13,1.18,1.24][tier]||1;
+  const atkMul=[1,1.16,1.25,1.34,1.45][tier]||1;
+  const baseSpd=(e.slow>0?42:72)+(battle.monsterId>=900?12:0),spd=baseSpd*speedMul;
+  if(d>66){if(e.root<=0){e.x+=dx/d*spd*dt;e.y+=dy/d*spd*dt;}}else if(e.attackCd<=0){const scale=Math.max(1,(progress.level||1)*.16);arpgEnemyHitHero(e,(5+scale+Math.random()*5+(battle.monsterId>=900?7:0))*atkMul);e.attackCd=(.9+Math.random()*.8)/Math.min(1.18,speedMul);}
 }
 function arpgUpdate(dt){
   if(!battle){arpgCleanup();return;}if(!arpg||arpg.battleRef!==battle)arpgInit();if(!arpg)return;
@@ -7041,6 +7086,26 @@ function arpgDrawDaggerArc(f){
   ctx.restore();
 }
 
+function arpgDrawSuzuArc(f,fire=false){
+  const t=Math.max(0,Math.min(1,f.age/f.life)),fade=1-t;
+  const start=-1.42,sweep=Math.PI*1.10;
+  ctx.save();ctx.translate(f.x,f.y);ctx.scale(f.face||1,1);ctx.lineCap='round';
+  for(let i=0;i<6;i++){
+    const lag=i*.105,local=Math.max(0,Math.min(1,t-lag));if(local<=0)continue;
+    const end=start+sweep*Math.min(1,local*1.45),r=(f.r||61)+i*2.2;
+    const a=Math.max(.035,fade*(.58-i*.065)+.06);
+    ctx.beginPath();
+    ctx.strokeStyle=fire?`rgba(255,74,48,${a})`:`rgba(238,248,255,${a})`;
+    ctx.lineWidth=Math.max(2,(fire?12:10)-i*1.35);ctx.arc(0,0,r,start,end);ctx.stroke();
+  }
+  // 火炎斬りは内側に橙色の芯を重ね、赤い高速残像として見せる。
+  if(fire){
+    const head=start+sweep*Math.min(1,t*1.5);
+    ctx.beginPath();ctx.strokeStyle=`rgba(255,184,82,${.2+fade*.72})`;ctx.lineWidth=4;ctx.arc(0,0,(f.r||68)-4,start,head);ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function arpgDrawIceWave(f){
   const t=Math.min(1,f.age/f.life),r=f.maxR*t,alpha=Math.max(0,1-t);
   ctx.save();
@@ -7056,7 +7121,7 @@ function arpgDrawBattle(){
   arpg.enemies.forEach(arpgDrawEnemy);
   if(arpgPartyEnabled('suzu'))drawSuzumaru(arpg.allies.suzu.x,arpg.allies.suzu.y,.82);if(arpgPartyEnabled('yuno'))drawYuno(arpg.allies.yuno.x,arpg.allies.yuno.y,.80);if(arpgPartyEnabled('gyou')){drawGyou(arpg.allies.gyou.x,arpg.allies.gyou.y,.80);if(arpg.allies.gyou.shield>0){ctx.strokeStyle='rgba(255,231,150,.8)';ctx.lineWidth=5;ctx.beginPath();ctx.arc(arpg.allies.gyou.x,arpg.allies.gyou.y-10,34,-1.2,1.2);ctx.stroke();}}
   ctx.save();if(arpg.hero.inv>0&&Math.floor(arpg.hero.inv*20)%2)ctx.globalAlpha=.45;drawHeroFox(arpg.hero.x,arpg.hero.y,.95);ctx.restore();
-  for(const f of arpg.fx){if(f.type==='daggerArc')arpgDrawDaggerArc(f);else if(f.type==='iceDashLine')arpgDrawIceDashLine(f);else if(f.type==='iceWave')arpgDrawIceWave(f);}
+  for(const f of arpg.fx){if(f.type==='daggerArc')arpgDrawDaggerArc(f);else if(f.type==='suzuSwordArc')arpgDrawSuzuArc(f,false);else if(f.type==='suzuFireArc')arpgDrawSuzuArc(f,true);else if(f.type==='iceDashLine')arpgDrawIceDashLine(f);else if(f.type==='iceWave')arpgDrawIceWave(f);}
   for(const p of arpg.projectiles){ctx.fillStyle='rgba(190,240,255,.85)';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#e8fbff';ctx.lineWidth=3;ctx.stroke();}
   // HUD
   rect(18,16,330,70,'rgba(8,22,45,.82)');text(`${heroName}  HP ${Math.ceil(battle.heroHP)}/${progress.maxHP}`,32,39,17,'left','#fff',900);text(`MP ${Math.ceil(battle.heroMP)}/${progress.maxMP}`,32,65,15,'left','#bfe7ff',800);
