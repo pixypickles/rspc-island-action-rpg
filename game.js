@@ -1856,7 +1856,7 @@ function drawTitle(){
     ctx.fillStyle=col;ctx.fillText(part,tx,75);tx+=ctx.measureText(part).width;
   }
   ctx.restore();
-  text('Ver.0.1.16',480,121,18,'center','#eef8ff');
+  text('Ver.0.1.17',480,121,18,'center','#eef8ff');
   text('♪ BGM：Mキー　効果音：Nキー　ON / OFF',480,145,12,'center','#d9edf5');
   const canContinue=hasSaveGame(),cleared=!!progress.gameCleared;
   const labels=['はじめから','初期状態へリセット',canContinue?'つづきから':'つづきから（セーブなし）'];
@@ -6673,7 +6673,7 @@ stickBase.addEventListener('pointerup',stickEnd);stickBase.addEventListener('poi
 
 
 // ============================================================
-// ARPG PROTOTYPE Ver.0.1.16
+// ARPG PROTOTYPE Ver.0.1.17
 // Existing events / maps / save data are retained; only battle play is
 // replaced with a real-time action layer.
 // ============================================================
@@ -6898,27 +6898,37 @@ function arpgInputDir8(){
   return {x:Math.cos(snap),y:Math.sin(snap)};
 }
 function arpgDashTargetSegment(d){
-  // 各段ごとに現在位置から最寄りの敵を再検索。多段でも毎回「近い敵」を斬りに行く。
-  const e=arpgNearestEnemy(arpg.hero.x,arpg.hero.y,280);
-  let dx=arpg.hero.face||1,dy=0,dist=d.baseDist;
+  // 多段氷結斬りは毎段近い敵を狙う。ただし直前方向へほぼ180度反転する軌道は避ける。
+  const live=arpg.enemies.filter(e=>e.src.hp>0&&Math.hypot(e.x-arpg.hero.x,e.y-arpg.hero.y)<=300);
+  let e=null,dx=arpg.hero.face||1,dy=0,dist=d.baseDist;
+  const pdx=d.prevDx,pdy=d.prevDy;
+  if(live.length){
+    live.sort((a,b)=>Math.hypot(a.x-arpg.hero.x,a.y-arpg.hero.y)-Math.hypot(b.x-arpg.hero.x,b.y-arpg.hero.y));
+    if(Number.isFinite(pdx)&&Number.isFinite(pdy)){
+      e=live.find(q=>{const qx=q.x-arpg.hero.x,qy=q.y-arpg.hero.y,ql=Math.max(1,Math.hypot(qx,qy));return (qx/ql)*pdx+(qy/ql)*pdy>-0.35;})||live[0];
+    }else e=live[0];
+  }
   if(e){
     dx=e.x-arpg.hero.x;dy=e.y-arpg.hero.y;
-    const len=Math.max(1,Math.hypot(dx,dy));
-    dx/=len;dy/=len;
-    // 敵を少し通り抜ける距離まで高速移動し、確実に斬撃判定を通す。
-    dist=Math.max(68,Math.min(285,len+24));
-    d.target=e;
+    const len=Math.max(1,Math.hypot(dx,dy));dx/=len;dy/=len;
+    if(Number.isFinite(pdx)&&Number.isFinite(pdy)){
+      const dot=Math.max(-1,Math.min(1,dx*pdx+dy*pdy)),maxTurn=105*Math.PI/180,turn=Math.acos(dot);
+      if(turn>maxTurn){const cross=pdx*dy-pdy*dx,sign=cross>=0?1:-1,c=Math.cos(sign*maxTurn),sn=Math.sin(sign*maxTurn);dx=pdx*c-pdy*sn;dy=pdx*sn+pdy*c;}
+    }
+    dist=Math.max(68,Math.min(220,len+22));d.target=e;
+  }else if(Number.isFinite(pdx)&&Number.isFinite(pdy)){
+    dx=pdx;dy=pdy;d.target=null;
   }else{
     const input=arpgInputDir8();dx=input.x;dy=input.y;d.target=null;
   }
-  d.dx=dx;d.dy=dy;d.dist=dist;d.time=0;d.hit=new Set();d.startX=arpg.hero.x;d.startY=arpg.hero.y-8;
+  d.dx=dx;d.dy=dy;d.prevDx=dx;d.prevDy=dy;d.dist=dist;d.time=0;d.hit=new Set();d.startX=arpg.hero.x;d.startY=arpg.hero.y-8;
   if(Math.abs(dx)>.1)arpg.hero.face=dx>0?1:-1;
 }
 function arpgUseA(){
   if(!arpg||arpg.cd.a>0||arpg.winTimer||arpg.loseTimer||arpg.hero.dash)return;const cost=6;if(!arpgSpendMP(cost))return;
   const lv=arpgIceSlashRank(),count=arpgIceSlashCount();
   const baseDist=count===1?124:count===2?108:count===3?96:count===6?82:72;
-  arpg.hero.dash={dx:arpg.hero.face||1,dy:0,segment:0,segments:count,time:0,total:.105,dist:baseDist,baseDist,hit:new Set(),target:null,startX:arpg.hero.x,startY:arpg.hero.y-8};
+  arpg.hero.dash={dx:arpg.hero.face||1,dy:0,prevDx:null,prevDy:null,segment:0,segments:count,time:0,total:.105,dist:baseDist,baseDist,hit:new Set(),target:null,startX:arpg.hero.x,startY:arpg.hero.y-8};
   arpgDashTargetSegment(arpg.hero.dash);
   arpg.message=progress.nineTailGear?`九尾・氷結斬り ×${count}`:count>1?`氷結斬り ×${count}`:'氷結斬り！';arpg.messageT=.8;
   arpg.cd.a=Math.max(1.5,3.0-lv*.16);sfx('ice');
@@ -7087,6 +7097,20 @@ function arpgUpdateEnemy(e,dt){
     }
     return;
   }
+  if(e.src.kind==='blackDragon'||e.src.kind==='whiteDragon'){
+    // 異界の黒白竜も火山の古竜と同系統。画面内で間合いを取り、炎を吐く。
+    if(d<185&&e.root<=0){e.x-=dx/d*spd*.40*dt;e.y-=dy/d*spd*.40*dt;}
+    else if(d>350&&e.root<=0){e.x+=dx/d*spd*.27*dt;e.y+=dy/d*spd*.27*dt;}
+    if(e.attackCd<=0){const ang=Math.atan2(dy,dx)+(Math.random()-.5)*.13,fs=265;arpg.projectiles.push({type:'enemyFire',enemy:true,x:e.x,y:e.y-20,vx:Math.cos(ang)*fs,vy:Math.sin(ang)*fs,r:13,life:2.5,dmg:(13+(progress.level||1)*.34)*atkMul});e.attackCd=1.05+Math.random()*.48;arpg.message=`${e.src.name}が炎を吐いた！`;arpg.messageT=.65;}
+    e.x=Math.max(125,Math.min(W-125,e.x));e.y=Math.max(155,Math.min(405,e.y));return;
+  }
+  if(e.src.kind==='yamataOrochi'){
+    // 九頭龍は九つの首から、主人公周辺へランダム性を持たせた9発の炎を一斉射する。
+    if(d<210&&e.root<=0){e.x-=dx/d*spd*.22*dt;e.y-=dy/d*spd*.22*dt;}
+    else if(d>360&&e.root<=0){e.x+=dx/d*spd*.16*dt;e.y+=dy/d*spd*.16*dt;}
+    if(e.attackCd<=0){const aim=Math.atan2(dy,dx);for(let i=0;i<9;i++){const ang=aim+(Math.random()-.5)*1.05,fs=220+Math.random()*95;arpg.projectiles.push({type:'enemyFire',enemy:true,x:e.x+(i-4)*5,y:e.y-35-Math.abs(i-4)*4,vx:Math.cos(ang)*fs,vy:Math.sin(ang)*fs,r:11+Math.random()*3,life:2.8,dmg:(8.5+(progress.level||1)*.25)*atkMul});}e.attackCd=1.75+Math.random()*.55;arpg.message='九頭龍が九つの炎を吐いた！';arpg.messageT=.8;sfx('fire');}
+    e.x=Math.max(150,Math.min(W-150,e.x));e.y=Math.max(175,Math.min(390,e.y));return;
+  }
   if(e.src.kind==='dragon'){
     // 火山の古竜は大きく追い回さず、距離を保って火球を飛ばす。
     if(d<180&&e.root<=0){e.x-=dx/d*spd*.42*dt;e.y-=dy/d*spd*.42*dt;}
@@ -7115,7 +7139,7 @@ function arpgUpdate(dt){
     for(const e of arpg.enemies){if(e.src.hp<=0||d.hit.has(e))continue;const vx=e.x-arpg.hero.x,vy=e.y-arpg.hero.y;if(Math.hypot(vx,vy)<58){d.hit.add(e);const dmg=(progress.atk||8)*1.08+9+lv*4+Math.random()*6;arpgDamageEnemy(e,dmg,'ice');e.slow=1.2+.18*lv;}}
     if(d.time>=d.total){
       const endX=arpg.hero.x,endY=arpg.hero.y-8;
-      arpg.fx.push({type:'iceDashLine',x1:d.startX,y1:d.startY,x2:endX,y2:endY,age:0,life:.38});
+      arpg.fx.push({type:'iceDashLine',x1:d.startX,y1:d.startY,x2:endX,y2:endY,age:0,life:.38,lanes:progress.nineTailGear?3:1});
       d.segment++;
       if(d.segment>=d.segments){arpg.hero.dash=null;}
       else{
@@ -7176,20 +7200,27 @@ function arpgDrawVolcanoDragon(x,y,s=1){
   rect(-29,29,12,32,'#793229');rect(-5,33,12,31,'#793229');rect(20,29,12,32,'#793229');
   ctx.restore();
 }
+function arpgDrawRecolorDragon(x,y,s=1,white=false){
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  const body=white?'#e9eef5':'#222934',belly=white?'#b8d4e4':'#596271',dark=white?'#9cb7c9':'#10151e',wing=white?'#cbd9e5':'#161c27',eye=white?'#377aa2':'#ff5b42',horn=white?'#e9d9a8':'#c8b385';
+  ellipse(0,38,44,10,'rgba(0,0,0,.24)');ctx.strokeStyle=dark;ctx.lineWidth=18;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-28,18);ctx.bezierCurveTo(-70,35,-78,4,-104,12);ctx.stroke();
+  ellipse(-4,5,42,31,body);ellipse(7,15,25,22,belly);ctx.fillStyle=wing;ctx.beginPath();ctx.moveTo(-28,-2);ctx.lineTo(-73,-55);ctx.lineTo(-58,10);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(25,-2);ctx.lineTo(72,-51);ctx.lineTo(57,12);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=body;ctx.lineWidth=15;ctx.beginPath();ctx.moveTo(18,-7);ctx.quadraticCurveTo(34,-45,55,-47);ctx.stroke();ellipse(62,-49,25,18,body);ellipse(74,-42,15,10,belly);
+  ctx.fillStyle=horn;ctx.beginPath();ctx.moveTo(48,-62);ctx.lineTo(50,-82);ctx.lineTo(58,-63);ctx.fill();ctx.beginPath();ctx.moveTo(65,-65);ctx.lineTo(73,-84);ctx.lineTo(75,-61);ctx.fill();ellipse(57,-53,3.5,3.5,eye);ellipse(72,-50,3,3,eye);rect(-29,29,12,32,dark);rect(-5,33,12,31,dark);rect(20,29,12,32,dark);ctx.restore();
+}
 function arpgDrawEnemy(e){
   if(e.src.hp<=0)return;ctx.save();if(e.flash>0)ctx.globalAlpha=.45;
   const mon={x:e.x,y:e.y,alive:true,kind:e.src.kind};
-  if(e.src.kind==='pirateCaptain')drawPirateCaptainEnemy(e.x,e.y,.8);else if(e.src.kind==='viceCaptain')drawViceCaptainEnemy(e.x,e.y,.8);else if(e.src.kind==='blackDragon'||e.src.kind==='whiteDragon')drawAbyssDragon(e.x,e.y,.5,e.src.kind==='whiteDragon');else if(e.src.kind==='dragon')arpgDrawVolcanoDragon(e.x,e.y,.78);else drawWildMonster(mon);
+  if(e.src.kind==='pirateCaptain')drawPirateCaptainEnemy(e.x,e.y,.8);else if(e.src.kind==='viceCaptain')drawViceCaptainEnemy(e.x,e.y,.8);else if(e.src.kind==='blackDragon'||e.src.kind==='whiteDragon')arpgDrawRecolorDragon(e.x,e.y,.78,e.src.kind==='whiteDragon');else if(e.src.kind==='dragon')arpgDrawVolcanoDragon(e.x,e.y,.78);else if(e.src.kind==='yamataOrochi')drawYamataNoOrochi(e.x,e.y,.62);else drawWildMonster(mon);
   ctx.restore();const ratio=Math.max(0,e.src.hp/e.src.maxHP);rect(e.x-34,e.y-48,68,7,'rgba(0,0,0,.55)');rect(e.x-34,e.y-48,68*ratio,7,'#e16a63');text(e.src.name,e.x,e.y-57,11,'center','#4b2323',800);
 }
 function arpgDrawCooldown(btn,x,y,cd,max,label){
   const ready=cd<=0;text(label,x,y,12,'center',ready?'#ffffff':'#a7b6c5',900);if(!ready)text(cd.toFixed(1),x,y+15,12,'center','#ffe8a8',800);
 }
 function arpgDrawIceDashLine(f){
-  const t=Math.max(0,Math.min(1,f.age/f.life)),a=1-t;
-  ctx.save();ctx.lineCap='round';
-  ctx.strokeStyle=`rgba(95,208,255,${.18+a*.48})`;ctx.lineWidth=13*a+2;ctx.beginPath();ctx.moveTo(f.x1,f.y1);ctx.lineTo(f.x2,f.y2);ctx.stroke();
-  ctx.strokeStyle=`rgba(224,250,255,${.2+a*.72})`;ctx.lineWidth=4*a+1;ctx.beginPath();ctx.moveTo(f.x1,f.y1);ctx.lineTo(f.x2,f.y2);ctx.stroke();
+  const t=Math.max(0,Math.min(1,f.age/f.life)),a=1-t,lanes=f.lanes||1;ctx.save();ctx.lineCap='round';
+  const dx=f.x2-f.x1,dy=f.y2-f.y1,len=Math.max(1,Math.hypot(dx,dy)),nx=-dy/len,ny=dx/len,offsets=lanes>=3?[-8,0,8]:[0];
+  for(const off of offsets){ctx.strokeStyle=`rgba(95,208,255,${.16+a*.44})`;ctx.lineWidth=(lanes>=3?8:13)*a+2;ctx.beginPath();ctx.moveTo(f.x1+nx*off,f.y1+ny*off);ctx.lineTo(f.x2+nx*off,f.y2+ny*off);ctx.stroke();ctx.strokeStyle=`rgba(224,250,255,${.2+a*.68})`;ctx.lineWidth=(lanes>=3?3:4)*a+1;ctx.beginPath();ctx.moveTo(f.x1+nx*off,f.y1+ny*off);ctx.lineTo(f.x2+nx*off,f.y2+ny*off);ctx.stroke();}
   ctx.restore();
 }
 function arpgDrawDaggerArc(f){
